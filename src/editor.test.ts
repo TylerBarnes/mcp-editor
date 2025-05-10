@@ -128,6 +128,51 @@ const expectedNewContent = 'Keep this\nAnd this too'; // Allow blank lines if pr
       expect(result).toContain('has been edited');
     });
 
+
+  describe('undoEdit', () => {
+    it('should undo the last edit to a file', async () => {
+      const filePath = '/test/undoable.txt';
+      const initialContent = 'Line 1\nLine 2\nLine 3';
+      const changedContent = 'Line 1\nCHANGED Line 2\nLine 3';
+
+      // Mock initial read for strReplace
+      (fs.readFile as Mock).mockResolvedValueOnce(initialContent);
+      // Mock stat for strReplace
+      (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+      // Mock writeFile for strReplace
+      (fs.writeFile as Mock).mockResolvedValueOnce(undefined);
+
+      // Perform an edit
+      await editor.strReplace({
+        path: filePath,
+        old_str: 'Line 2',
+        new_str: 'CHANGED Line 2',
+      });
+
+      // Mock writeFile for undoEdit (this is the one we'll check for old content)
+      (fs.writeFile as Mock).mockResolvedValueOnce(undefined);
+      // Mock stat for undoEdit
+      (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+      const result = await editor.undoEdit({ path: filePath });
+
+      // Check that writeFile was called with the initial content during undo
+      expect(fs.writeFile).toHaveBeenCalledWith(filePath, initialContent, 'utf8');
+      expect(result).toContain(`Last edit to ${filePath} undone successfully`);
+expect(result).toContain('1\tLine 1'); // Check for a line from makeOutput
+    });
+
+    it('should throw ToolError if no edit history is found for the file', async () => {
+      const filePath = '/test/no-history.txt';
+      (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false }); // For validatePath
+
+      await expect(editor.undoEdit({ path: filePath }))
+        .rejects.toThrow(ToolError);
+      await expect(editor.undoEdit({ path: filePath }))
+        .rejects.toThrow(`No edit history found for ${filePath}`);
+    });
+  });
+
     // TODO: Add more tests:
     // - Multi-line replacements with fuzzy matching
     // - Cases where old_str is not found at all (very high distance)

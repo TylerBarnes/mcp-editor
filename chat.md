@@ -3737,3 +3737,236 @@ Shall we move on to testing `undoEdit`?
 
 ---
 
+Great, lets do it!
+
+---
+
+> agent **Reese** 🤖💬 _(google.generative-ai/gemini-2.5-pro-preview-05-06)_
+
+Excellent! Let's add tests for the `undoEdit` functionality.
+
+I'll create a new `describe` block specifically for `undoEdit` in `src/editor.test.ts`.
+
+Here's the plan for the first test case:
+1.  Perform an initial edit (e.g., using `strReplace` since it's well-tested).
+2.  Call `undoEdit` on the same file.
+3.  Assert that `fs.writeFile` is called during the undo operation with the content *before* the `strReplace` edit.
+4.  Assert that the success message for `undoEdit` is correct.
+
+Let's add this test.
+
+---
+
+> insert("/Users/personal16/code/arathald/mcp-editor/src/editor.test.ts", "L130")
+
+Text:
+```ts
+
+  describe('undoEdit', () => {
+    it('should undo the last edit to a file', async () => {
+      const filePath = '/test/undoable.txt';
+      const initialContent = 'Line 1\nLine 2\nLine 3';
+      const changedContent = 'Line 1\nCHANGED Line 2\nLine 3';
+
+      // Mock initial read for strReplace
+      (fs.readFile as Mock).mockResolvedValueOnce(initialContent);
+      // Mock stat for strReplace
+      (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+      // Mock writeFile for strReplace
+      (fs.writeFile as Mock).mockResolvedValueOnce(undefined);
+
+      // Perform an edit
+      await editor.strReplace({
+        path: filePath,
+        old_str: 'Line 2',
+        new_str: 'CHANGED Line 2',
+      });
+
+      // Mock writeFile for undoEdit (this is the one we'll check for old content)
+      (fs.writeFile as Mock).mockResolvedValueOnce(undefined);
+      // Mock stat for undoEdit
+      (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+      const result = await editor.undoEdit({ path: filePath });
+
+      // Check that writeFile was called with the initial content during undo
+      expect(fs.writeFile).toHaveBeenCalledWith(filePath, initialContent, 'utf8');
+      expect(result).toContain(`Last edit to ${filePath} undone successfully`);
+      expect(result).toContain(initialContent);
+    });
+
+    it('should throw ToolError if no edit history is found for the file', async () => {
+      const filePath = '/test/no-history.txt';
+      (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false }); // For validatePath
+
+      await expect(editor.undoEdit({ path: filePath }))
+        .rejects.toThrow(ToolError);
+      await expect(editor.undoEdit({ path: filePath }))
+        .rejects.toThrow(`No edit history found for ${filePath}`);
+    });
+  });
+
+```
+
+
+
+[call 📨](./.reese/tool-calls/yFSjSBkI1Fdzmvar-call.json)
+[result 📦](./.reese/tool-calls/yFSjSBkI1Fdzmvar-result.json)
+
+---
+
+> agent **Reese** 🤖💬 _(google.generative-ai/gemini-2.5-pro-preview-05-06)_
+
+I've added a new `describe` block for `undoEdit` with two test cases:
+1.  Successfully undoing a previous `strReplace` operation.
+2.  Throwing a `ToolError` when trying to undo on a file with no edit history.
+
+Let's run the tests!
+
+---
+
+> execute_command(npm test )
+
+[call 📨](./.reese/tool-calls/psZUp0skfX2YChpE-call.json)
+[result 📦](./.reese/tool-calls/psZUp0skfX2YChpE-result.json)
+
+
+❌ Failed
+```bash
+Command failed with exit code 1: npm test
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/editor.test.ts > FileEditor > strReplace > undoEdit > should undo the last edit to a file
+AssertionError: expected 'Last edit to /test/undoable.txt undon…' to contain 'Line 1\nLine 2\nLine 3'
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- L[7mine 1[27m[39m
+[32m- Line 2[39m
+[32m- Line 3[39m
+[31m+ L[7mast edit to /test/undoable.txt undone successfully. Here's the result of running `cat -n` on /test/undoable.txt:[27m[39m
+[31m+      1	Line 1[39m
+[31m+      2	Line 2[39m
+[31m+ [7m     3	[27mLine 3[39m
+[31m+[39m
+
+ ❯ src/editor.test.ts:162:22
+    160|       expect(fs.writeFile).toHaveBeenCalledWith(filePath, initialConte…
+    161|       expect(result).toContain(`Last edit to ${filePath} undone succes…
+    162|       expect(result).toContain(initialContent);
+       |                      ^
+    163|     });
+    164| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+> mcp-editor@1.0.0 test
+> vitest
+
+
+ RUN  v3.1.3 /Users/personal16/code/arathald/mcp-editor
+
+ ❯ src/editor.test.ts (8 tests | 1 failed) 9ms
+   ✓ FileEditor > strReplace > should replace string with different indentation using fuzzy matching 2ms
+   ✓ FileEditor > strReplace > should throw ToolError if no sufficiently close match is found 1ms
+   ✓ FileEditor > strReplace > should perform multi-line replacement with fuzzy matching and different indentation 0ms
+   ✓ FileEditor > strReplace > should not replace if old_str is very different (high Levenshtein distance) 0ms
+   ✓ FileEditor > strReplace > should replace even if old_str uses tabs and file uses spaces (and vice versa) 0ms
+   ✓ FileEditor > strReplace > should delete the matched block if new_str is empty 0ms
+   × FileEditor > strReplace > undoEdit > should undo the last edit to a file 4ms
+     → expected 'Last edit to /test/undoable.txt undon…' to contain 'Line 1\nLine 2\nLine 3'
+   ✓ FileEditor > strReplace > undoEdit > should throw ToolError if no edit history is found for the file 0ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 passed (8)
+   Start at  16:54:18
+   Duration  285ms (transform 53ms, setup 0ms, collect 56ms, tests 9ms, environment 0ms, prepare 51ms)
+
+```
+
+---
+
+> agent **Reese** 🤖💬 _(google.generative-ai/gemini-2.5-pro-preview-05-06)_
+
+Ah, the test failed because the `undoEdit` success message includes the `makeOutput` formatted string, not just the raw `initialContent`.
+
+The fix is simple: update the assertion to check for a substring that *is* present in the `makeOutput` format, like one of the numbered lines.
+
+Let's adjust the test.
+
+---
+
+> string_replace("/Users/personal16/code/arathald/mcp-editor/src/editor.test.ts")
+
+From:
+```ts
+expect(result).toContain(initialContent);
+```
+
+To:
+```ts
+expect(result).toContain('1\tLine 1'); // Check for a line from makeOutput
+```
+
+
+
+[call 📨](./.reese/tool-calls/uh6T2Y8P9RxBBosl-call.json)
+[result 📦](./.reese/tool-calls/uh6T2Y8P9RxBBosl-result.json)
+
+---
+
+> agent **Reese** 🤖💬 _(google.generative-ai/gemini-2.5-pro-preview-05-06)_
+
+Okay, I've updated the assertion in the `undoEdit` test.
+
+Let's run the tests again!
+
+---
+
+> execute_command(npm test )
+
+[call 📨](./.reese/tool-calls/mxfiCxhBLJQufhpk-call.json)
+[result 📦](./.reese/tool-calls/mxfiCxhBLJQufhpk-result.json)
+
+
+✅ Success
+```bash
+
+> mcp-editor@1.0.0 test
+> vitest
+
+
+ RUN  v3.1.3 /Users/personal16/code/arathald/mcp-editor
+
+ ✓ src/editor.test.ts (8 tests) 5ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  16:54:26
+   Duration  290ms (transform 51ms, setup 0ms, collect 58ms, tests 5ms, environment 0ms, prepare 37ms)
+
+```
+
+---
+
+> agent **Reese** 🤖💬 _(google.generative-ai/gemini-2.5-pro-preview-05-06)_
+
+🎉 All tests passed!
+
+We now have test coverage for:
+*   `strReplace` (various scenarios including fuzzy matching, tabs/spaces, deletion)
+*   `undoEdit` (successful undo and no history error)
+
+The `FileEditor` is looking much more robust and well-tested.
+
+What would you like to tackle next? We could:
+1.  Add tests for the other `FileEditor` methods (`view`, `create`, `insert`).
+2.  Refactor or clean up any part of the code.
+3.  Consider edge cases or more complex scenarios for the existing tests.
+4.  Move on to a different feature or bug.
+
+---
+
