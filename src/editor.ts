@@ -142,6 +142,7 @@ export class FileEditor {
         const newFileContent = newFileLines.join('\n');
         await writeFile(args.path, newFileContent);
 
+
         if (!this.fileHistory[args.path]) {
             this.fileHistory[args.path] = [];
         }
@@ -156,7 +157,7 @@ export class FileEditor {
         let successMsg = `The file ${args.path} has been edited. `;
         successMsg += makeOutput(snippet, `a snippet of ${args.path}`, startLine + 1);
         successMsg += 'Review the changes and make sure they are as expected. Edit the file again if necessary.';
-successMsg += `\nLevenshtein average distance for match: ${bestMatch.avgDist.toFixed(2)} (threshold: ${threshold})\n`;
+        successMsg += `\nLevenshtein average distance for match: ${bestMatch.avgDist.toFixed(2)} (threshold: ${threshold})\n`;
 
 
         return successMsg;
