@@ -136,7 +136,7 @@ export class FileEditor {
         // Replace the original lines in fileLines from bestMatch.start to bestMatch.start + oldLines.length
         const newFileLines = [
             ...fileLines.slice(0, bestMatch.start),
-            ...newStr.split('\n'),
+            ...(newStr ? newStr.split('\n') : []),
             ...fileLines.slice(bestMatch.start + oldLines.length)
         ];
         const newFileContent = newFileLines.join('\n');
