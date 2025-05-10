@@ -1,7 +1,15 @@
-import * as path from 'path';
 import { promises as fs } from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { distance } from 'fastest-levenshtein';
+
+function normalizeWhitespace(str: string): string {
+    return str.replace(/\t/g, '    ') // tabs to spaces
+        .replace(/ +/g, ' ')           // collapse multiple spaces
+        .replace(/^ +| +$/gm, '')      // trim each line
+        .replace(/\r?\n/g, '\n');   // normalize newlines
+}
+
 import {
     FileHistory,
     ToolError,
@@ -17,7 +25,7 @@ import {
     writeFile,
     makeOutput,
     validatePath,
-    truncateText
+    // truncateText
 } from './utils.js';
 
 const execAsync = promisify(exec);
@@ -100,35 +108,50 @@ export class FileEditor {
         const oldStr = args.old_str.replace(/\t/g, '    ');
         const newStr = args.new_str?.replace(/\t/g, '    ') ?? '';
 
-        const occurrences = fileContent.split(oldStr).length - 1;
-        if (occurrences === 0) {
+        // Split and normalize
+        const oldLines = oldStr.split('\n').map(normalizeWhitespace);
+        const fileLines = fileContent.split('\n');
+        const normFileLines = fileLines.map(normalizeWhitespace);
+        const threshold = Math.max(2, Math.floor(oldStr.length * 0.1));
+
+        let bestMatch = { start: -1, avgDist: Infinity };
+
+        for (let i = 0; i <= normFileLines.length - oldLines.length; i++) {
+            let totalDist = 0;
+            for (let j = 0; j < oldLines.length; j++) {
+                totalDist += distance(normFileLines[i + j], oldLines[j]);
+            }
+            const avgDist = totalDist / oldLines.length;
+            if (avgDist < bestMatch.avgDist) {
+                bestMatch = { start: i, avgDist };
+            }
+        }
+
+        if (bestMatch.avgDist > threshold || bestMatch.start === -1) {
             throw new ToolError(
-                `No replacement was performed, old_str \`${args.old_str}\` did not appear verbatim in ${args.path}.`
+                `No replacement was performed. No sufficiently close match for old_str \`${args.old_str}\` found in ${args.path}. Fuzziness threshold: ${threshold}, closest average distance: ${bestMatch.avgDist}. Try adjusting your input or the file content.`
             );
         }
 
-        if (occurrences > 1) {
-            const lines = fileContent.split('\n')
-                .map((line, idx) => line.includes(oldStr) ? idx + 1 : null)
-                .filter((idx): idx is number => idx !== null);
-
-            throw new ToolError(
-                `No replacement was performed. Multiple occurrences of old_str \`${args.old_str}\` in lines ${lines}. Please ensure it is unique`
-            );
-        }
-
-        const newContent = fileContent.replace(oldStr, newStr);
-        await writeFile(args.path, newContent);
+        // Replace the original lines in fileLines from bestMatch.start to bestMatch.start + oldLines.length
+        const newFileLines = [
+            ...fileLines.slice(0, bestMatch.start),
+            ...newStr.split('\n'),
+            ...fileLines.slice(bestMatch.start + oldLines.length)
+        ];
+        const newFileContent = newFileLines.join('\n');
+        await writeFile(args.path, newFileContent);
 
         if (!this.fileHistory[args.path]) {
             this.fileHistory[args.path] = [];
         }
         this.fileHistory[args.path].push(fileContent);
 
-        const replacementLine = fileContent.split(oldStr)[0].split('\n').length;
+        // Find the line number for the snippet
+        const replacementLine = bestMatch.start + 1;
         const startLine = Math.max(0, replacementLine - SNIPPET_LINES);
         const endLine = replacementLine + SNIPPET_LINES + newStr.split('\n').length;
-        const snippet = newContent.split('\n').slice(startLine, endLine + 1).join('\n');
+        const snippet = newFileContent.split('\n').slice(startLine, endLine + 1).join('\n');
 
         let successMsg = `The file ${args.path} has been edited. `;
         successMsg += makeOutput(snippet, `a snippet of ${args.path}`, startLine + 1);
@@ -136,6 +159,7 @@ export class FileEditor {
 
         return successMsg;
     }
+
 
     async insert(args: InsertArgs): Promise<string> {
         await validatePath('insert', args.path);
