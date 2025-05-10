@@ -2175,3 +2175,419 @@ Give it another try with your agent or test case! If you run into any more issue
 
 ---
 
+It worked great!!
+
+```json
+{
+  "type": "tool-result",
+  "toolCallId": "call_TYQK8DsYLJVRKFxFAdSuddIT",
+  "toolName": "string_replace",
+  "args": {
+    "path": "/Users/personal16/code/TylerBarnes/reese3/src/tests/document.test.ts",
+    "old_str": "it(\"should parse markdown and extract frontmatter\", async () => {\n        const content = `---\n        // Create file1.txt in the temp directory\n        const file1Content = \"This is file1.txt content for frontmatter context test.\"\n        const file1Path = path.join(tempDir, \"file1.txt\")\n        await fs.writeFile(file1Path, file1Content, \"utf-8\")\n        tempFiles.push(file1Path)\n\ncontext:\n  - file1.txt\n---\n\n# Hello\n\nThis is the body.`\n        const filePath = await createTempFile(content)\n        tempFiles.push(filePath)\n\n        const document = new Document({ filePath })\n        const { systemMessages, messages } = await document.toUIMessages()\n\n        // Check frontmatter extraction (via systemMessages)\n        expect(systemMessages.length).toBe(1)\n        expect(systemMessages[0].role).toBe(\"system\")\n        expect(systemMessages[0].content).toContain(\n            \"==== CONTEXT FROM FILE: file1.txt ====\",\n        )\n        expect(systemMessages[0].content).toContain(\n            \"==== CONTEXT FROM URL: http://example.com ====\",\n        )\n\n        // Check basic markdown parsing (via messages)\n        expect(messages.length).toBe(1) // Should contain the initial human message\n        expect(messages[0].role).toBe(\"user\")\n        expect(messages[0].parts[0].type).toBe(\"text\")\n        expect((messages[0].parts[0] as any).text).toContain(\n            \"# Hello\\n\\nThis is the body.\",\n        )\n    })",
+    "new_str": "it(\"should parse markdown and extract frontmatter\", async () => {\n    // Create file1.txt in the temp directory\n    const file1Content = \"This is file1.txt content for frontmatter context test.\"\n    const file1Path = path.join(tempDir, \"file1.txt\")\n    await fs.writeFile(file1Path, file1Content, \"utf-8\")\n    tempFiles.push(file1Path)\n\n    const content = `---\ncontext:\n  - file1.txt\n---\n\n# Hello\n\nThis is the body.`\n    const filePath = await createTempFile(content)\n    tempFiles.push(filePath)\n\n    const document = new Document({ filePath })\n    const { systemMessages, messages } = await document.toUIMessages()\n\n    // Check frontmatter extraction (via systemMessages)\n    expect(systemMessages.length).toBe(1)\n    expect(systemMessages[0].role).toBe(\"system\")\n    expect(systemMessages[0].content).toContain(\n        \"==== CONTEXT FROM FILE: file1.txt ====\",\n    )\n\n    // Check basic markdown parsing (via messages)\n    expect(messages.length).toBe(1) // Should contain the initial human message\n    expect(messages[0].role).toBe(\"user\")\n    expect(messages[0].parts[0].type).toBe(\"text\")\n    expect((messages[0].parts[0] as any).text).toContain(\n        \"# Hello\\n\\nThis is the body.\",\n    )\n})"
+  },
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "The file /Users/personal16/code/TylerBarnes/reese3/src/tests/document.test.ts has been edited. Here's the result of running `cat -n` on a snippet of /Users/personal16/code/TylerBarnes/reese3/src/tests/document.test.ts:\n    68\t    })\n    69\t\n    70\t    // Test 2 & 3: Markdown Parsing and Frontmatter Extraction\n    71\tit(\"should parse markdown and extract frontmatter\", async () => {\n    72\t    // Create file1.txt in the temp directory\n    73\t    const file1Content = \"This is file1.txt content for frontmatter context test.\"\n    74\t    const file1Path = path.join(tempDir, \"file1.txt\")\n    75\t    await fs.writeFile(file1Path, file1Content, \"utf-8\")\n    76\t    tempFiles.push(file1Path)\n    77\t\n    78\t    const content = `---\n    79\tcontext:\n    80\t  - file1.txt\n    81\t---\n    82\t\n    83\t# Hello\n    84\t\n    85\tThis is the body.`\n    86\t    const filePath = await createTempFile(content)\n    87\t    tempFiles.push(filePath)\n    88\t\n    89\t    const document = new Document({ filePath })\n    90\t    const { systemMessages, messages } = await document.toUIMessages()\n    91\t\n    92\t    // Check frontmatter extraction (via systemMessages)\n    93\t    expect(systemMessages.length).toBe(1)\n    94\t    expect(systemMessages[0].role).toBe(\"system\")\n    95\t    expect(systemMessages[0].content).toContain(\n    96\t        \"==== CONTEXT FROM FILE: file1.txt ====\",\n    97\t    )\n    98\t\n    99\t    // Check basic markdown parsing (via messages)\n   100\t    expect(messages.length).toBe(1) // Should contain the initial human message\n   101\t    expect(messages[0].role).toBe(\"user\")\n   102\t    expect(messages[0].parts[0].type).toBe(\"text\")\n   103\t    expect((messages[0].parts[0] as any).text).toContain(\n   104\t        \"# Hello\\n\\nThis is the body.\",\n   105\t    )\n   106\t})\n   107\t\n   108\t    // Test 4: Context Building (Files) - This is partially covered by the previous test,\n   109\t    // but let's add one specifically for file content inclusion.\n   110\t    it(\"should include file content in system messages\", async () => {\n   111\t        const file1Content = \"Content of file1.\"\n   112\t        const file1Path = await createTempFile(file1Content)\nReview the changes and make sure they are as expected. Edit the file again if necessary."
+      }
+    ]
+  }
+}
+```
+
+Question: should we include the levenshtein distance in the result message?
+
+---
+
+> agent **Reese** 🤖💬 _(openai.chat/gpt-4.1)_
+
+🎉 That’s fantastic to hear it worked!
+
+Including the Levenshtein distance (or average distance) in the result message is a great idea for transparency and debugging. It helps users understand how “close” the match was and can be useful for tuning the threshold or troubleshooting.
+
+Here’s what I recommend:
+
+- On a successful replacement, include the average Levenshtein distance and the threshold used in the message.
+- On failure, you’re already including both, which is perfect.
+
+Would you like me to update the success message to include the average distance and threshold?
+
+---
+
+Yes please
+
+---
+
+> agent **Reese** 🤖💬 _(openai.chat/gpt-4.1)_
+
+👍 Great!  
+I'll update the success message for string replacements to include:
+
+- The average Levenshtein distance of the match
+- The threshold used for matching
+
+This will make results more transparent and help with future tuning or debugging.
+
+I'll make that change now.
+
+
+---
+
+> view(/Users/personal16/code/arathald/mcp-editor/src/editor.ts)
+
+[call 📨](./.reese/tool-calls/call_wKy8gK7rd6Pysgtjh8wtaz6w-call.json)
+[result 📦](./.reese/tool-calls/call_wKy8gK7rd6Pysgtjh8wtaz6w-result.json)
+
+
+---
+
+> view(/Users/personal16/code/arathald/mcp-editor/src/editor.ts)
+
+[call 📨](./.reese/tool-calls/call_NzKGdIAlaaYXDGosniBCLPrt-call.json)
+[result 📦](./.reese/tool-calls/call_NzKGdIAlaaYXDGosniBCLPrt-result.json)
+
+
+---
+
+> tool(_insert_)
+
+[call 📨](./.reese/tool-calls/call_mskXZklF7T2ZD74yC7n2jVgF-call.json)
+[result 📦](./.reese/tool-calls/call_mskXZklF7T2ZD74yC7n2jVgF-result.json)
+
+---
+
+> agent **Reese** 🤖💬 _(openai.chat/gpt-4.1)_
+
+✅ Done!  
+The success message for string replacements now includes the average Levenshtein distance and the threshold used for the match.
+
+This will make results more transparent and help with future debugging or tuning.  
+Let me know if you want to tweak the format or add more details!
+
+---
+
+This is great! Thank you! Lets add a test. Does this project have tests setup? If not please install and use vitest
+
+---
+
+> agent **Reese** 🤖💬 _(google.generative-ai/gemini-2.5-pro-preview-05-06)_
+
+Excellent! Adding tests is a great next step to ensure everything keeps working as expected. 🚀
+
+I'll first check if `vitest` or another testing framework is already set up in your `package.json`.
+
+---
+
+> view(/Users/personal16/code/arathald/mcp-editor/package.json)
+
+[call 📨](./.reese/tool-calls/z0Q3XhZLPQqJMGY9-call.json)
+[result 📦](./.reese/tool-calls/z0Q3XhZLPQqJMGY9-result.json)
+
+---
+
+> agent **Reese** 🤖💬 _(google.generative-ai/gemini-2.5-pro-preview-05-06)_
+
+It looks like `vitest` isn't set up yet.
+
+I'll install `vitest` as a dev dependency.
+
+---
+
+> execute_command(npm install -D vitest)
+
+[call 📨](./.reese/tool-calls/d6lHmmXMd9oPZ9dm-call.json)
+[result 📦](./.reese/tool-calls/d6lHmmXMd9oPZ9dm-result.json)
+
+
+✅ Success
+```bash
+
+added 46 packages, and audited 66 packages in 10s
+
+15 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+```
+
+---
+
+> agent **Reese** 🤖💬 _(google.generative-ai/gemini-2.5-pro-preview-05-06)_
+
+Great, `vitest` is installed!
+
+Now, I'll add a test script to your `package.json` so you can run tests easily.
+
+---
+
+> string_replace("/Users/personal16/code/arathald/mcp-editor/package.json")
+
+From:
+```json
+"dev": "tsc -w"
+```
+
+To:
+```json
+"dev": "tsc -w",
+    "test": "vitest"
+```
+
+
+
+[call 📨](./.reese/tool-calls/zsb233qCMDFjChlj-call.json)
+[result 📦](./.reese/tool-calls/zsb233qCMDFjChlj-result.json)
+
+---
+
+> agent **Reese** 🤖💬 _(google.generative-ai/gemini-2.5-pro-preview-05-06)_
+
+OK, the `test` script has been added to your `package.json`.
+
+Next, I'll create a new test file for the `FileEditor` class. I'll start with a basic test for the `strReplace` method, focusing on the fuzzy matching and whitespace normalization we just implemented.
+
+What would you like to name the test file? A common convention is `[filename].test.ts`. So, for `editor.ts`, it would be `editor.test.ts`. Is that good?
+
+---
+
+Yeah that sounds great!
+
+
+---
+
+> agent **Reese** 🤖💬 _(google.generative-ai/gemini-2.5-pro-preview-05-06)_
+
+Okay, I'll create `src/editor.test.ts` and add an initial test case for the `strReplace` method. This test will verify that fuzzy matching works correctly even with differing whitespace and indentation.
+
+Here's the plan:
+1.  Create the file `src/editor.test.ts`.
+2.  Add necessary imports (`describe`, `it`, `expect`, `vi` from `vitest`, `FileEditor` from `./editor.js`, and `fs` for mocking).
+3.  Set up mocks for `fs.readFile` and `fs.writeFile`.
+4.  Write a test case where `old_str` has different indentation than the content in the mock file, but should still match and be replaced.
+5.  Assert that the file content is correctly updated and the success message includes the Levenshtein distance.
+
+Let's create the test file!
+
+---
+
+> create("/Users/personal16/code/arathald/mcp-editor/src/editor.test.ts")
+
+File text:
+```ts
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FileEditor } from './editor.js';
+import { promises as fs } from 'fs';
+import { ToolError } from './types.js';
+
+// Mock the fs module
+vi.mock('fs', async () => {
+  const actualFs = await vi.importActual('fs');
+  return {
+    ...actualFs,
+    promises: {
+      ...actualFs.promises,
+      readFile: vi.fn(),
+      writeFile: vi.fn(),
+      stat: vi.fn(),
+    },
+  };
+});
+
+describe('FileEditor', () => {
+  let editor: FileEditor;
+
+  beforeEach(() => {
+    editor = new FileEditor();
+    // Reset mocks before each test
+    vi.resetAllMocks();
+  });
+
+  describe('strReplace', () => {
+    it('should replace string with different indentation using fuzzy matching', async () => {
+      const filePath = '/test/file.txt';
+      const oldStr = '  Hello World  '; // Has leading/trailing spaces
+      const newStr = 'Hello Vitest';
+      const fileContent = 'This is a test.\nHello World\nAnother line.'; // No leading/trailing spaces
+
+      (fs.readFile as vi.Mock).mockResolvedValue(fileContent);
+      (fs.writeFile as vi.Mock).mockResolvedValue(undefined);
+      (fs.stat as vi.Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+
+      const result = await editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr });
+
+      const expectedNewContent = 'This is a test.\nHello Vitest\nAnother line.';
+      expect(fs.writeFile).toHaveBeenCalledWith(filePath, expectedNewContent, 'utf8');
+      expect(result).toContain('Levenshtein average distance for match');
+      expect(result).toContain('has been edited');
+    });
+
+    it('should throw ToolError if no sufficiently close match is found', async () => {
+      const filePath = '/test/file.txt';
+      const oldStr = 'NonExistentString';
+      const newStr = 'ThisShouldNotReplace';
+      const fileContent = 'This is a test.\nHello World\nAnother line.';
+
+      (fs.readFile as vi.Mock).mockResolvedValue(fileContent);
+      (fs.stat as vi.Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+      await expect(editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr }))
+        .rejects.toThrow(ToolError);
+      await expect(editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr }))
+        .rejects.toThrow(/No replacement was performed/);
+    });
+
+    // TODO: Add more tests:
+    // - Multi-line replacements with fuzzy matching
+    // - Cases where old_str is not found at all (very high distance)
+    // - Cases with tabs vs spaces
+    // - Replacement with an empty new_str (deletion)
+    // - File history and undo (though undo might need its own describe block)
+  });
+});
+
+```
+
+
+[call 📨](./.reese/tool-calls/FxVh0ALn9vMC1Uwe-call.json)
+[result 📦](./.reese/tool-calls/FxVh0ALn9vMC1Uwe-result.json)
+
+---
+
+> agent **Reese** 🤖💬 _(google.generative-ai/gemini-2.5-pro-preview-05-06)_
+
+OK, I've created `src/editor.test.ts` with an initial test case for `strReplace` that covers fuzzy matching with different indentation. I've also added a test for when no close match is found.
+
+I'll run the tests now and see what happens!
+
+
+---
+
+> execute_command(npm test )
+
+[call 📨](./.reese/tool-calls/zDEXSjBkjB7q9vBg-call.json)
+[result 📦](./.reese/tool-calls/zDEXSjBkjB7q9vBg-result.json)
+
+
+❌ Failed
+```bash
+Command failed with exit code 1: npm test
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/editor.test.ts > FileEditor > strReplace > should replace string with different indentation using fuzzy matching
+ReferenceError: minAvgDistance is not defined
+ ❯ FileEditor.strReplace src/editor.ts:159:68
+    157|         successMsg += makeOutput(snippet, `a snippet of ${args.path}`,…
+    158|         successMsg += 'Review the changes and make sure they are as ex…
+    159|         successMsg += `\nLevenshtein average distance for match: ${min…
+       |                                                                    ^
+    160| 
+    161| 
+ ❯ src/editor.test.ts:41:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+> mcp-editor@1.0.0 test
+> vitest
+
+
+ RUN  v3.1.3 /Users/personal16/code/arathald/mcp-editor
+
+ ❯ src/editor.test.ts (2 tests | 1 failed) 5ms
+   × FileEditor > strReplace > should replace string with different indentation using fuzzy matching 3ms
+     → minAvgDistance is not defined
+   ✓ FileEditor > strReplace > should throw ToolError if no sufficiently close match is found 1ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  16:27:54
+   Duration  280ms (transform 46ms, setup 0ms, collect 51ms, tests 5ms, environment 0ms, prepare 41ms)
+
+```
+
+---
+
+> agent **Reese** 🤖💬 _(google.generative-ai/gemini-2.5-pro-preview-05-06)_
+
+Ah, it looks like there's a small typo in `src/editor.ts`. The variable `minAvgDistance` is used in the success message, but it should be `bestMatch.avgDist`.
+
+I'll fix that now and re-run the tests.
+
+---
+
+> string_replace("/Users/personal16/code/arathald/mcp-editor/src/editor.ts")
+
+From:
+```ts
+successMsg += `\nLevenshtein average distance for match: ${minAvgDistance.toFixed(2)} (threshold: ${threshold})\n`;
+```
+
+To:
+```ts
+successMsg += `\nLevenshtein average distance for match: ${bestMatch.avgDist.toFixed(2)} (threshold: ${threshold})\n`;
+```
+
+
+
+[call 📨](./.reese/tool-calls/jikk6D4VJzHZfJB3-call.json)
+[result 📦](./.reese/tool-calls/jikk6D4VJzHZfJB3-result.json)
+
+---
+
+> agent **Reese** 🤖💬 _(google.generative-ai/gemini-2.5-pro-preview-05-06)_
+
+OK, I've corrected the variable name in the success message.
+
+Let's run the tests again!
+
+---
+
+> execute_command(npm test )
+
+[call 📨](./.reese/tool-calls/IDJ3TOma2LxqbH3t-call.json)
+[result 📦](./.reese/tool-calls/IDJ3TOma2LxqbH3t-result.json)
+
+
+✅ Success
+```bash
+
+> mcp-editor@1.0.0 test
+> vitest
+
+
+ RUN  v3.1.3 /Users/personal16/code/arathald/mcp-editor
+
+ ✓ src/editor.test.ts (2 tests) 3ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  16:28:00
+   Duration  255ms (transform 48ms, setup 0ms, collect 52ms, tests 3ms, environment 0ms, prepare 42ms)
+
+```
+
+---
+
+> agent **Reese** 🤖💬 _(google.generative-ai/gemini-2.5-pro-preview-05-06)_
+
+🎉 All tests passed!
+
+We now have:
+
+* Robust fuzzy string replacement that handles multi-line blocks and whitespace/indentation differences.
+* Clear success and error messages with Levenshtein distances and thresholds.
+* A test suite with initial coverage for `strReplace`.
+
+This is a great place to be! What would you like to do next? We could:
+
+1. Add more test cases (e.g., multi-line replacements, tabs vs. spaces, empty `new_str`).
+2. Refactor or clean up any part of the code.
+3. Move on to another feature or bug.
+
+---
+
