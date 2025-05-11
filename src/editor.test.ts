@@ -210,6 +210,30 @@ describe('FileEditor', () => {
 
         const fileContent = 'Line 1\nLine 2\nLine 3';
         (fs.readFile as Mock).mockResolvedValue(fileContent);
+      });
+
+      it('should throw ToolError if view_range is out of bounds', async () => {
+        const filePath = '/test/viewrange-outofbounds.txt';
+        const fileContent = 'Line 1\nLine 2\nLine 3';
+        (fs.readFile as Mock).mockResolvedValue(fileContent);
+        (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+        // Start line < 1
+        await expect(editor.view({ path: filePath, view_range: [0, 2] }))
+          .rejects.toThrow(/Invalid `view_range`/);
+
+        // Start line > number of lines
+        await expect(editor.view({ path: filePath, view_range: [10, 12] }))
+          .rejects.toThrow(/Invalid `view_range`/);
+
+        // End line < start line
+        await expect(editor.view({ path: filePath, view_range: [2, 1] }))
+          .rejects.toThrow(/Invalid `view_range`/);
+
+        // End line > number of lines
+        await expect(editor.view({ path: filePath, view_range: [2, 10] }))
+          .rejects.toThrow(/Invalid `view_range`/);
+
         (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
 
         const result = await editor.view({ path: filePath });
@@ -218,6 +242,42 @@ describe('FileEditor', () => {
         expect(result).toContain('1\tLine 1');
         expect(result).toContain('2\tLine 2');
         expect(result).toContain('3\tLine 3');
+      });
+      it('should throw if view_range is used on a directory', async () => {
+        const dirPath = '/test/dir';
+        (fs.stat as Mock).mockResolvedValue({ isFile: () => false, isDirectory: () => true });
+        editor.execAsync = vi.fn().mockResolvedValue({ stdout: '', stderr: '' });
+        await expect(editor.view({ path: dirPath, view_range: [1, 2] }))
+          .rejects.toThrow(/view_range.*not allowed.*directory/);
+      });
+
+      it('should handle empty files', async () => {
+        const filePath = '/test/empty.txt';
+        const fileContent = '';
+        (fs.readFile as Mock).mockResolvedValue(fileContent);
+        (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+        const result = await editor.view({ path: filePath });
+        expect(result).toContain('cat -n');
+      });
+
+      it('should handle files with only one line', async () => {
+        const filePath = '/test/one-line.txt';
+        const fileContent = 'Just one line';
+        (fs.readFile as Mock).mockResolvedValue(fileContent);
+        (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+        const result = await editor.view({ path: filePath });
+        expect(result).toContain('1\tJust one line');
+      });
+
+      it('should handle view_range: [1, -1] (show all lines)', async () => {
+        const filePath = '/test/all-lines.txt';
+        const fileContent = 'A\nB\nC';
+        (fs.readFile as Mock).mockResolvedValue(fileContent);
+        (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+        const result = await editor.view({ path: filePath, view_range: [1, -1] });
+        expect(result).toContain('1\tA');
+        expect(result).toContain('2\tB');
+        expect(result).toContain('3\tC');
       });
     });
 
