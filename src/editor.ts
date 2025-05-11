@@ -170,7 +170,7 @@ export class FileEditor {
         await validatePath('insert', args.path);
 
         const fileContent = await readFile(args.path);
-        const newStr = args.new_str.replace(/\t/g, '    ');
+        const newStr = args.new_str.replace(/\t/g, '    ').replace(/\\t/g, `    `);
         const fileLines = fileContent.split('\n');
         const nLinesFile = fileLines.length;
 
