@@ -28,9 +28,11 @@ import {
     // truncateText
 } from './utils.js';
 
-const execAsync = promisify(exec);
+const realExecAsync = promisify(exec);
 
 export class FileEditor {
+    protected execAsync = realExecAsync;
+
     private fileHistory: FileHistory = {};
 
     async view(args: ViewArgs): Promise<string> {
@@ -43,7 +45,7 @@ export class FileEditor {
                 );
             }
 
-            const { stdout, stderr } = await execAsync(
+            const { stdout, stderr } = await this.execAsync(
                 `find "${args.path}" -maxdepth 2 -not -path '*/\\.*'`
             );
 

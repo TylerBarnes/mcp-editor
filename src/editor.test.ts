@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
-import { FileEditor } from './editor.js';
-import { promises as fs } from 'fs';
-import { ToolError } from './types.js';
 
-// Mock the fs module
+// Mock fs
 vi.mock('fs', async () => {
   const actualFs = await vi.importActual('fs');
   return {
@@ -17,13 +14,29 @@ vi.mock('fs', async () => {
   };
 });
 
-describe('FileEditor', () => {
-  let editor: FileEditor;
+const execAsyncMock = vi.fn();
+vi.doMock('./editor.js', async (importOriginal) => {
+  const originalModule = await importOriginal();
+  return {
+    ...(originalModule as any),
+    execAsync: execAsyncMock, // This is not working as execAsync is not exported
+  };
+});
 
-  beforeEach(() => {
+
+import { promises as fs } from 'fs'; // fs will be the mocked version here
+import { ToolError } from './types.js';
+
+// Actual test suite starts here
+describe('FileEditor', () => {
+  let editor: any;
+
+  beforeEach(async () => {
+    const { FileEditor } = await import('./editor.js');
     editor = new FileEditor();
     // Reset mocks before each test
     vi.resetAllMocks();
+    execAsyncMock.mockReset(); // Also reset our execAsyncMock
   });
 
   describe('strReplace', () => {
@@ -37,7 +50,6 @@ describe('FileEditor', () => {
       (fs.writeFile as Mock).mockResolvedValue(undefined);
       (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
 
-
       const result = await editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr });
 
       const expectedNewContent = 'This is a test.\nHello Vitest\nAnother line.';
@@ -46,6 +58,7 @@ describe('FileEditor', () => {
       expect(result).toContain('has been edited');
     });
 
+    });
     it('should throw ToolError if no sufficiently close match is found', async () => {
       const filePath = '/test/file.txt';
       const oldStr = 'NonExistentString';
@@ -170,8 +183,54 @@ expect(result).toContain('1\tLine 1'); // Check for a line from makeOutput
         .rejects.toThrow(ToolError);
       await expect(editor.undoEdit({ path: filePath }))
         .rejects.toThrow(`No edit history found for ${filePath}`);
+  });
+
+  describe('view', () => {
+    it('should view the content of a file', async () => {
+      const filePath = '/test/viewfile.txt';
+      const fileContent = 'Line 1\nLine 2\nLine 3';
+      (fs.readFile as Mock).mockResolvedValue(fileContent);
+      (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+      const result = await editor.view({ path: filePath });
+
+      expect(result).toContain(`Here's the result of running \`cat -n\` on ${filePath}`);
+      expect(result).toContain('1\tLine 1');
+      expect(result).toContain('2\tLine 2');
+      expect(result).toContain('3\tLine 3');
     });
   });
+
+    it('should view a specific range of lines in a file', async () => {
+      const filePath = '/test/viewrange.txt';
+      const fileContent = 'Line 1\nLine 2\nLine 3\nLine 4\nLine 5';
+      (fs.readFile as Mock).mockResolvedValue(fileContent);
+      (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+      const result = await editor.view({ path: filePath, view_range: [2, 4] });
+
+      expect(result).toContain(`Here's the result of running \`cat -n\` on ${filePath}`);
+      expect(result).not.toContain('1\tLine 1');
+      expect(result).toContain('2\tLine 2');
+      expect(result).toContain('3\tLine 3');
+      expect(result).toContain('4\tLine 4');
+      expect(result).not.toContain('5\tLine 5');
+    });
+
+
+    it('should view a directory listing', async () => {
+      const dirPath = '/test/dir';
+      const dirListing = 'file1.txt\ndir1\n  file2.txt';
+      (fs.stat as Mock).mockResolvedValue({ isFile: () => false, isDirectory: () => true });
+
+      // Set the execAsync mock for this instance
+      editor.execAsync = vi.fn().mockResolvedValue({ stdout: dirListing, stderr: '' });
+
+      const result = await editor.view({ path: dirPath });
+
+      expect(result).toContain(`Here's the files and directories up to 2 levels deep in ${dirPath}`);
+      expect(result).toContain(dirListing);
+    });
 
     // TODO: Add more tests:
     // - Multi-line replacements with fuzzy matching
