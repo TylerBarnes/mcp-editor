@@ -163,6 +163,9 @@ class EditorServer {
                             if (!request.params.arguments || !isStrReplaceArgs(request.params.arguments)) {
                                 throw new ToolError("Invalid arguments for string_replace command");  // Fixed
                             }
+                            if (request.params.arguments.old_str === "") {
+                                throw new ToolError("old_str cannot be an empty string. That's too generic and will result in replacing a random empty string in the file.")
+                            }
                             result = await this.editor.strReplace(request.params.arguments);
                             break;
                         // case "insert":

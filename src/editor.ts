@@ -3,11 +3,13 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { distance } from 'fastest-levenshtein';
 
-function normalizeWhitespace(str: string): string {
-    return str.replace(/\t/g, '    ') // tabs to spaces
-        .replace(/ +/g, ' ')           // collapse multiple spaces
+function removeWhitespace(str: string): string {
+    return str.replace(/\t/g, '') // tabs to spaces
+        .replace(/ +/g, '')           // collapse multiple spaces
         .replace(/^ +| +$/gm, '')      // trim each line
-        .replace(/\r?\n/g, '\n');   // normalize newlines
+        .replace(/\r?\n/g, '\n')
+        // @ts-ignore
+        .replaceAll(`\\n`, `\n`);   // normalize newlines
 }
 
 import {
@@ -107,29 +109,68 @@ export class FileEditor {
         await validatePath('string_replace', args.path);
 
         const fileContent = await readFile(args.path);
-        const oldStr = args.old_str.replace(/\t/g, '    ');
-        const newStr = args.new_str?.replace(/\t/g, '    ') ?? '';
+        const oldStr = args.old_str.replace(`\\n`, `\n`)
+        const newStr = (args.new_str || "")
 
         // Split and normalize
-        const oldLines = oldStr.split('\n').map(normalizeWhitespace);
+        const oldLines = oldStr.split('\n').map(removeWhitespace);
         const fileLines = fileContent.split('\n');
-        const normFileLines = fileLines.map(normalizeWhitespace);
+        const normFileLines = fileLines.map(removeWhitespace);
         const threshold = Math.max(2, Math.floor(oldStr.length * 0.1));
 
         let bestMatch = { start: -1, avgDist: Infinity };
 
-        for (let i = 0; i <= normFileLines.length - oldLines.length; i++) {
-            let totalDist = 0;
-            for (let j = 0; j < oldLines.length; j++) {
-                totalDist += distance(normFileLines[i + j], oldLines[j]);
-            }
-            const avgDist = totalDist / oldLines.length;
-            if (avgDist < bestMatch.avgDist) {
-                bestMatch = { start: i, avgDist };
+        if (oldLines.length === 1) {
+            const matches = normFileLines.filter(l => l === oldLines[0])
+            if (matches.length > 1) {
+                throw new ToolError(`Single line search string "${oldLines[0]}" has too many matches. This will result in innacurate replacements. Found ${matches.length} matches`)
             }
         }
 
-        if (bestMatch.avgDist > threshold || bestMatch.start === -1) {
+        const escapeCount = newStr.match(/\\/g)
+
+        if ((escapeCount?.length || 0) > 10) {
+            throw new ToolError(`Found more than 10 backslash characters. This indicates you've escaped all the characters instead of passing them in directly.`)
+        }
+
+        for (const [index, normLine] of normFileLines.entries()) {
+            // this line is equal to the first line in our from replacement. Lets check each following line to see if we match
+            // const firstDistance = distance(oldLines[0], normLine) // allow for a 2 char difference
+            if (oldLines[0] === normLine) {
+                let isMatching = true
+                for (const [matchIndex, oldLine] of oldLines.entries()) {
+                    // const innerDistance = distance(oldLine, normFileLines[index + matchIndex])
+                    if (oldLine === normFileLines[index + matchIndex]) {
+                        // all good! we're matching
+                        console.error(`matching ${index + matchIndex}`)
+                    } else {
+                        console.error(`diverged`)
+                        // we could also do levenstein here
+                        isMatching = false
+                        // we diverged
+                        break
+                    }
+                }
+                if (isMatching) {
+                    bestMatch.start = index
+                    console.error(`matched! ${index}`)
+                    break
+                }
+            }
+        }
+        // for (let i = 0; i <= normFileLines.length - oldLines.length; i++) {
+        //     let totalDist = 0;
+        //     for (let j = 0; j < oldLines.length; j++) {
+        //         totalDist += distance(normFileLines[i + j], oldLines[j]);
+        //     }
+        //     const avgDist = totalDist / oldLines.length;
+        //     if (avgDist < bestMatch.avgDist) {
+        //         bestMatch = { start: i, avgDist };
+        //     }
+        // }
+
+        if (bestMatch.start === -1) {
+        // if (bestMatch.avgDist > threshold || bestMatch.start === -1) {
             throw new ToolError(
                 `No replacement was performed. No sufficiently close match for old_str \`${args.old_str}\` found in ${args.path}. Fuzziness threshold: ${threshold}, closest average distance: ${bestMatch.avgDist}. Try adjusting your input or the file content.`
             );
