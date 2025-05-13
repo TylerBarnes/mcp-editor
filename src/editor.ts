@@ -127,10 +127,17 @@ export class FileEditor {
             }
         }
 
-        const escapeCount = newStr.match(/\\/g)
+        const escapeCountOld = oldStr.split(`\n`).join(``).match(/\\/g)
 
-        if ((escapeCount?.length || 0) > 10) {
-            throw new ToolError(`Found more than 10 backslash characters. This indicates you've escaped all the characters instead of passing them in directly.`)
+        if ((escapeCountOld?.length || 0) > 10) {
+            throw new ToolError(`Found more than 10 backslash characters in the old_str. This indicates the input string has been escaped instead of passed in directly.`)
+        }
+
+
+        const escapeCountNew = newStr.split(`\n`).join(``).match(/\\/g)
+
+        if ((escapeCountNew?.length || 0) > 10) {
+            throw new ToolError(`Found more than 10 backslash characters in the new_str. This indicates the input string has been escaped instead of passed in directly.`)
         }
 
         for (const [index, normLine] of normFileLines.entries()) {
