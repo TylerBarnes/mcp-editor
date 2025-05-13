@@ -46,9 +46,7 @@ export async function validatePath(command: string, filePath: string): Promise<v
         path.join(process.cwd(), filePath);
 
     if (!path.isAbsolute(filePath)) {
-        throw new ToolError(
-            `The path ${filePath} is not an absolute path, it should start with '/'. Maybe you meant ${absolutePath}?`
-        );
+        filePath = absolutePath
     }
 
     try {
