@@ -62,7 +62,7 @@ export class FileEditor {
         if (args.view_range) {
             const fileLines = fileContent.split('\n');
             const nLinesFile = fileLines.length;
-            const [start, end] = args.view_range;
+            let [start, end] = args.view_range;
 
             if (start < 1 || start > nLinesFile) {
                 throw new ToolError(
@@ -72,9 +72,10 @@ export class FileEditor {
 
             if (end !== -1) {
                 if (end > nLinesFile) {
-                    throw new ToolError(
-                        `Invalid \`view_range\`: ${args.view_range}. Its second element \`${end}\` should be smaller than the number of lines in the file: \`${nLinesFile}\``
-                    );
+                    end = nLinesFile
+                    // throw new ToolError(
+                    //     `Invalid \`view_range\`: ${args.view_range}. Its second element \`${end}\` should be smaller than the number of lines in the file: \`${nLinesFile}\``
+                    // );
                 }
                 if (end < start) {
                     throw new ToolError(
