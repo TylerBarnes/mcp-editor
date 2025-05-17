@@ -95,6 +95,10 @@ class EditorServer {
                                 new_str: {
                                     type: "string",
                                     description: "Replacement string (empty string if omitted)"
+                                },
+                                start_line: {
+                                    type: "number",
+                                    description: "Start line number. Used to identify where to replace when the old_str matches multiple text chunks in the file."
                                 }
                             },
                             required: ["path", "old_str"]

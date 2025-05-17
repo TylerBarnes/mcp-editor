@@ -25,6 +25,7 @@ export interface StringReplaceArgs extends Record<string, unknown> {
     path: string;
     old_str: string;
     new_str?: string;
+    start_line?: number;
 }
 
 export interface InsertArgs extends Record<string, unknown> {

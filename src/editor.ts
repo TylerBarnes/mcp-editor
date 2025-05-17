@@ -110,8 +110,18 @@ export class FileEditor {
         await validatePath('string_replace', args.path);
 
         const fileContent = await readFile(args.path);
-        const oldStr = args.old_str.replace(`\\n`, `\n`)
-        const newStr = (args.new_str || "")
+        let oldStr = args.old_str.replace(`\\n`, `\n`)
+        let newStr = (args.new_str || "").replace(`\\n`, `\n`)
+        const startLineArg = args.start_line
+
+        // gemini loves adding a broken initial like starting with \+\n for some reason
+        if (oldStr.startsWith(`\\\n`)) {
+            oldStr = oldStr.substring(`\\`.length)
+        }
+        if (newStr.startsWith(`\\\n`)) {
+            newStr = newStr.substring(`\\`.length)
+        }
+
 
         // Split and normalize
         const oldLines = oldStr.split('\n').map(removeWhitespace);
@@ -119,13 +129,13 @@ export class FileEditor {
         const normFileLines = fileLines.map(removeWhitespace);
         const threshold = Math.max(2, Math.floor(oldStr.length * 0.1));
 
-        let bestMatch = { start: -1, avgDist: Infinity };
+        let bestMatch: {start:number,avgDist:number,type: "replace-lines"|"replace-in-line"} = { start: -1, avgDist: Infinity, type: "replace-lines" };
 
-        if (oldLines.length === 1) {
-            const matches = normFileLines.filter(l => l === oldLines[0])
-            if (matches.length > 1) {
-                throw new ToolError(`Single line search string "${oldLines[0]}" has too many matches. This will result in innacurate replacements. Found ${matches.length} matches`)
-            }
+        const isSingleLineReplacement = oldLines.length === 1
+
+        const matchLineNumbers = normFileLines.map((l, index) => l === oldLines[0] ? index + 1 : null).filter(Boolean)
+        if (isSingleLineReplacement && matchLineNumbers.length > 1 && ! startLineArg) {
+                throw new ToolError(`Single line search string "${oldLines[0]}" has too many matches. This will result in innacurate replacements. Found ${matchLineNumbers.length} matches. Pass start_line to choose one. Found on lines ${matchLineNumbers.join(`, `)}`)
         }
 
         const escapeCountOld = oldStr.split(`\n`).join(``).match(/\\/g)
@@ -142,17 +152,40 @@ export class FileEditor {
         }
 
         for (const [index, normLine] of normFileLines.entries()) {
+            if (typeof startLineArg !== `undefined` && index+1 < startLineArg ) continue
             // this line is equal to the first line in our from replacement. Lets check each following line to see if we match
-            // const firstDistance = distance(oldLines[0], normLine) // allow for a 2 char difference
-            if (oldLines[0] === normLine) {
+            const firstDistance = distance(oldLines[0], normLine) 
+            const firstPercentDiff = (firstDistance / normLine.length) * 100
+            if (firstPercentDiff < 10 && firstPercentDiff > 0) {
+                console.error({firstPercentDiff, firstDistance, lineLength: normLine.length })
+            }
+            // if (isSingleLineReplacement && (normLine === oldLines[0] || normLine.includes(oldLines[0]))) {
+            //    bestMatch.start = index 
+            //    bestMatch.type = "replace-in-line"
+            // } else
+            if (oldLines[0] === normLine || firstPercentDiff < 5) {
                 let isMatching = true
+                let matchingLineCount = 0
                 for (const [matchIndex, oldLine] of oldLines.entries()) {
-                    // const innerDistance = distance(oldLine, normFileLines[index + matchIndex])
-                    if (oldLine === normFileLines[index + matchIndex]) {
+                    const innerNormLine = normFileLines[index + matchIndex]
+                    const innerDistance = distance(oldLine, normFileLines[index + matchIndex])
+                    const innerPercentDiff = (innerDistance / innerNormLine.length) * 100
+                    if (innerPercentDiff < 10 && innerPercentDiff > 0) {
+                        console.error({innerPercentDiff, innerDistance, lineLength: innerNormLine.length})
+                    }
+                    const remainingLines = oldLines.length - matchingLineCount
+                    const percentLinesRemaining = (remainingLines / oldLines.length) * 100
+                    const isMatch = oldLine === innerNormLine || innerPercentDiff < 5
+                    const fewLinesAreLeft = oldLines.length >= 30 && percentLinesRemaining < 1
+                    if (!isMatch && fewLinesAreLeft) {
+                        console.error(`It's mostly a match! lets say it is anyway. Expected line: ${oldLine}, found line: ${innerNormLine}. ${remainingLines} lines were remaining`)
+                    }
+                    if (isMatch || fewLinesAreLeft) {
+                        matchingLineCount++
                         // all good! we're matching
                         console.error(`matching ${index + matchIndex}`)
                     } else {
-                        console.error(`diverged`)
+                        console.error(`diverged after ${matchingLineCount} lines.\nExpected line: ${oldLine}, found line: ${innerNormLine}. ${remainingLines} lines were remaining`)
                         // we could also do levenstein here
                         isMatching = false
                         // we diverged
@@ -177,7 +210,9 @@ export class FileEditor {
         //     }
         // }
 
-        if (bestMatch.start === -1) {
+        let newFileContent = ``
+      // if (bestMatch.type === `replace-lines`) {
+             if (bestMatch.start === -1) {
         // if (bestMatch.avgDist > threshold || bestMatch.start === -1) {
             throw new ToolError(
                 `No replacement was performed. No sufficiently close match for old_str \`${args.old_str}\` found in ${args.path}. Fuzziness threshold: ${threshold}, closest average distance: ${bestMatch.avgDist}. Try adjusting your input or the file content.`
@@ -190,9 +225,19 @@ export class FileEditor {
             ...(newStr ? newStr.split('\n') : []),
             ...fileLines.slice(bestMatch.start + oldLines.length)
         ];
-        const newFileContent = newFileLines.join('\n');
+        newFileContent = newFileLines.join('\n');
         await writeFile(args.path, newFileContent);
 
+        // }  
+        // else if (bestMatch.type === `replace-in-line`) {
+        // const newFileLines = [
+        //     ...fileLines.slice(0, bestMatch.start),
+        //     fileLines.at(bestMatch.start)!.replace(oldLines[0], newStr),
+        //     ...fileLines.slice(bestMatch.start + 1)
+        // ];
+        // newFileContent = newFileLines.join('\n');
+        // await writeFile(args.path, newFileContent);
+        // }
 
         if (!this.fileHistory[args.path]) {
             this.fileHistory[args.path] = [];
@@ -208,7 +253,7 @@ export class FileEditor {
         let successMsg = `The file ${args.path} has been edited. `;
         successMsg += makeOutput(snippet, `a snippet of ${args.path}`, startLine + 1);
         successMsg += 'Review the changes and make sure they are as expected. Edit the file again if necessary.';
-        successMsg += `\nLevenshtein average distance for match: ${bestMatch.avgDist.toFixed(2)} (threshold: ${threshold})\n`;
+        // successMsg += `\nLevenshtein average distance for match: ${bestMatch.avgDist.toFixed(2)} (threshold: ${threshold})\n`;
 
 
         return successMsg;
