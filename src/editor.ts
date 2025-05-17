@@ -112,7 +112,7 @@ export class FileEditor {
         const fileContent = await readFile(args.path);
         let oldStr = args.old_str.replace(`\\n`, `\n`)
         let newStr = (args.new_str || "").replace(`\\n`, `\n`)
-        const startLineArg = args.start_line
+        const startLineArg = typeof args.start_line === `number` ? Math.max(args.start_line - 1, 0) : undefined
 
         // gemini loves adding a broken initial like starting with \+\n for some reason
         if (oldStr.startsWith(`\\\n`)) {
@@ -121,10 +121,20 @@ export class FileEditor {
         if (newStr.startsWith(`\\\n`)) {
             newStr = newStr.substring(`\\`.length)
         }
+        // if (oldStr.endsWith(`\\n`)) {
+        //     // if we add an extra blankline it will try to match an empty string line instead of the next line, so remove the trailing \
+        //     // there may be a better way to do this
+        //     oldStr = oldStr.substring(oldStr.length, -(`\\n`.length))
+        // }
 
 
         // Split and normalize
-        const oldLines = oldStr.split('\n').map(removeWhitespace);
+        const oldLinesSplit = oldStr.split('\n')
+        const oldLines = oldLinesSplit.map(removeWhitespace).filter((l,i)=> {
+            if (i+1 !== oldLinesSplit.length) return true
+            // only keep last item if it's not an empty string
+            return l !== ``
+        });
         const fileLines = fileContent.split('\n');
         const normFileLines = fileLines.map(removeWhitespace);
         const threshold = Math.max(2, Math.floor(oldStr.length * 0.1));
@@ -134,7 +144,7 @@ export class FileEditor {
         const isSingleLineReplacement = oldLines.length === 1
 
         const matchLineNumbers = normFileLines.map((l, index) => l === oldLines[0] ? index + 1 : null).filter(Boolean)
-        if (isSingleLineReplacement && matchLineNumbers.length > 1 && ! startLineArg) {
+        if (isSingleLineReplacement && matchLineNumbers.length > 1 && !startLineArg) {
                 throw new ToolError(`Single line search string "${oldLines[0]}" has too many matches. This will result in innacurate replacements. Found ${matchLineNumbers.length} matches. Pass start_line to choose one. Found on lines ${matchLineNumbers.join(`, `)}`)
         }
 
@@ -152,7 +162,7 @@ export class FileEditor {
         }
 
         for (const [index, normLine] of normFileLines.entries()) {
-            if (typeof startLineArg !== `undefined` && index+1 < startLineArg ) continue
+            if (typeof startLineArg !== `undefined` && index+1 < startLineArg) continue
             // this line is equal to the first line in our from replacement. Lets check each following line to see if we match
             const firstDistance = distance(oldLines[0], normLine) 
             const firstPercentDiff = (firstDistance / normLine.length) * 100
