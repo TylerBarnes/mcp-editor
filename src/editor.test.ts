@@ -80,32 +80,32 @@ Review the changes and make sure they are as expected. Edit the file again if ne
       const newStr = "this.tagIndex.definitions.keys()";
 
       const fileContent = `for (const def of sortedDefinitions) {
-            const node = def.Key;
-            if (node >= this.tagGraph.GetGraph().Nodes.length) {
-                continue;
-            }
+                const node = def.Key;
+                if (node >= this.tagGraph.GetGraph().Nodes.length) {
+                    continue;
+                }
 
-            const nodePath = this.tagGraph.GetGraph().Nodes[node];
+                const nodePath = this.tagGraph.GetGraph().Nodes[node];
 
-            // Collect all definitions for this file
-            const fileTags: Tag[] = [];
-            // Iterate through all definitions to find tags for the current file
-            for (const definitionKey of this.tagIndex.Definitions.keys()) {
-                 const definitionTags = this.tagIndex.Definitions.get(definitionKey);
-                 if (definitionTags) {
-                     for (const tag of definitionTags) {
-                         if (tag.RelFname === nodePath) {
-                             fileTags.push(tag);
-                         }
-}
+                // Collect all definitions for this file
+                const fileTags: Tag[] = [];
+                // Iterate through all definitions to find tags for the current file
+                for (const definitionKey of this.tagIndex.Definitions.keys()) {
+                     const definitionTags = this.tagIndex.Definitions.get(definitionKey);
+                     if (definitionTags) {
+                         for (const tag of definitionTags) {
+                             if (tag.RelFname === nodePath) {
+                                 fileTags.push(tag);
+                             }
+    }
 
-                 }
-            }
+                     }
+                }
 
-            // Add sorted by line number
-            fileTags.sort((a, b) => a.Line - b.Line);
-            tags.push(...fileTags);
-        }`;
+                // Add sorted by line number
+                fileTags.sort((a, b) => a.Line - b.Line);
+                tags.push(...fileTags);
+            }`;
 
       (fs.readFile as Mock).mockResolvedValue(fileContent);
       (fs.writeFile as Mock).mockResolvedValue(undefined);
@@ -132,12 +132,12 @@ Review the changes and make sure they are as expected. Edit the file again if ne
 
     it("should replace partial single line matches", async () => {
       const fileContent = `
-describe('TagIndex', () => {
-  Existing test for language loading
-  it('should load supported languages', () => {
-    const tagIndex = new TagIndex('./testdata/repo'); // Pass a dummy path
-    const loadedLanguages = tagIndex.getLoadedLanguages();
-`;
+    describe('TagIndex', () => {
+      Existing test for language loading
+      it('should load supported languages', () => {
+        const tagIndex = new TagIndex('./testdata/repo'); // Pass a dummy path
+        const loadedLanguages = tagIndex.getLoadedLanguages();
+    `;
       const oldStr = "it('should load supported languages', () => {";
       const newStr = "it('should load supported languages', async () => {";
 
@@ -166,6 +166,181 @@ describe('TagIndex', () => {
       expect(result).not.toContain(oldStr);
     });
 
+    it("should replace partial single line matches 2", async () => {
+      const fileContent = `// tag.go
+
+package repomap
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+
+	tree_sitter "github.com/smacker/go-tree-sitter"
+)
+
+type Tag struct {
+	RelFname string
+	Fname    string
+	Line     int
+	Name     string
+	Kind     TagKind
+}
+
+// String implements the Stringer interface for Tag
+func (t Tag) String() string {
+	return fmt.Sprintf("%s:%d - %s (%s)", t.RelFname, t.Line, t.Name, t.Kind)
+}
+
+type TagKind int
+
+const (
+	Definition TagKind = iota
+	Reference
+)
+
+func (k TagKind) String() string {
+	switch k {
+	case Definition:
+		return "Definition"
+	case Reference:
+		return "Reference"
+	default:
+		return "Unknown"
+	}
+}
+
+type TagIndex struct {
+	Defines map[string]map[string]struct{}
+	References map[string][]string
+	Definitions map[string][]Tag
+	CommonTags map[string]struct{}
+	FileToTags map[string]map[string]struct{}
+	Path string
+	mu sync.Mutex
+}
+
+func NewTagIndex(path string) *TagIndex {
+	return &TagIndex{
+		Defines: make(map[string]map[string]struct{}),
+		References: make(map[string][]string),
+		Definitions: make(map[string][]Tag),
+		CommonTags: make(map[string]struct{}),
+		FileToTags: make(map[string]map[string]struct{}),
+		Path: path,
+	}
+}
+
+// GetFiles returns a map of file paths to their contents
+func (ti *TagIndex) GetFiles(dir string) (map[string][]byte, error) {
+	files := make(map[string][]byte)
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			files[path] = content
+		}
+		return nil
+	})
+	return files, err
+}
+
+// Query patterns for different languages
+const (
+	goQuery = \`
+		(function_declaration 
+			name: (identifier) @def.function)
+		(method_declaration 
+			receiver: (parameter_list) @method.receiver
+			name: (field_identifier) @def.method)
+		(type_declaration 
+			(type_spec 
+				name: (type_identifier) @def.type))
+		(identifier) @ref.ident
+		(field_identifier) @ref.field
+	\`
+	jsQuery = \`
+		(function_declaration 
+			name: (identifier) @def.function)
+		(method_definition 
+			name: (property_identifier) @def.method)
+		(class_declaration 
+			name: (identifier) @def.class)
+		(identifier) @ref.ident
+		(property_identifier) @ref.prop
+	\`
+)
+
+// GenerateFromFiles generates tags from the given files
+func (ti *TagIndex) GenerateFromFiles(ctx context.Context, files map[string][]byte) error {
+	ti.mu.Lock()
+	defer ti.mu.Unlock()
+
+	for path, content := range files {
+		// Skip non-source files
+		ext := filepath.Ext(path)
+		if _, ok := tsLanguages[strings.TrimPrefix(ext, ".")]; !ok {
+			continue
+		}
+
+		parser := tree_sitter.NewParser()
+		lang := tsLanguages[strings.TrimPrefix(ext, ".")]
+		parser.SetLanguage(lang)
+
+		tree, err := parser.ParseCtx(ctx, nil, content)
+		if err != nil {
+			return fmt.Errorf("failed to parse %s: %w", path, err)
+		}
+
+		// Select query based on file extension
+		var queryStr string
+		switch strings.TrimPrefix(ext, ".") {
+		case "go":
+			queryStr = goQuery
+		case "js", "jsx", "tsx":
+			queryStr = jsQuery
+		default:
+			continue
+		}
+`;
+      const start_line = 139;
+      const oldStr = 'case "js", "jsx", "tsx":';
+      const newStr = 'case "js", "ts", "jsx", "tsx":';
+
+      (fs.readFile as Mock).mockResolvedValue(fileContent);
+      (fs.writeFile as Mock).mockResolvedValue(undefined);
+      (fs.stat as Mock).mockResolvedValue({
+        isFile: () => true,
+        isDirectory: () => false,
+      });
+
+      const filePath = "tag.go";
+
+      const result = await editor.strReplace({
+        path: filePath,
+        old_str: oldStr,
+        new_str: newStr,
+        start_line,
+      });
+
+      expect(fs.writeFile).toHaveBeenCalledWith(
+        filePath,
+        expect.stringContaining(newStr),
+        "utf8",
+      );
+      expect(result).toContain(`The file tag.go has been edited.`);
+      expect(result).toContain(newStr);
+      expect(result).not.toContain(oldStr);
+    });
+
     it("should replace single line matches where the new string has multiple lines", async () => {
       const filePath = "/test/file.txt";
       const oldStr =
@@ -174,19 +349,19 @@ describe('TagIndex', () => {
         "  public async init(): Promise<void> {\n    await this.loadLanguages();\n  }\n\n  public getLoadedLanguages(): Record<string, Parser.Language> {";
 
       const fileContent = `
-public getCommonTags(): Set<string> {
-    return this.commonTags;
-  }
+    public getCommonTags(): Set<string> {
+        return this.commonTags;
+      }
 
-public getFileToTags(): Map<string, Set<string>> {
-    return this.fileToTags;
-  }
+    public getFileToTags(): Map<string, Set<string>> {
+        return this.fileToTags;
+      }
 
-  public getLoadedLanguages(): Record<string, Parser.Language> {
-      return this.languages;
-  }
-}
-`;
+      public getLoadedLanguages(): Record<string, Parser.Language> {
+          return this.languages;
+      }
+    }
+    `;
 
       (fs.readFile as Mock).mockResolvedValue(fileContent);
       (fs.writeFile as Mock).mockResolvedValue(undefined);
@@ -219,17 +394,17 @@ public getFileToTags(): Map<string, Set<string>> {
         "\\\n  public calculatePageRanks(): number[] | string[] {\n";
 
       const fileContent = `
-    public calculatePageRanks(): number[] | null {
-    const numNodes = this.graph.numNodes();
-    if (numNodes === 0) {
-      return null;
-    }
+        public calculatePageRanks(): number[] | null {
+        const numNodes = this.graph.numNodes();
+        if (numNodes === 0) {
+          return null;
+        }
 
-    console.log(\`[calculatePageRanks] Starting with \${numNodes} nodes.\`);
-    let ranks = Array(numNodes).fill(1.0 / numNodes);
-    console.log(\`[calculatePageRanks] Initial ranks array size: \${ranks.length}\`);
-    console.log(\`[calculatePageRanks] Initial rankedDefinitions map size: \${this.rankedDefinitions.size}\`);
-`;
+        console.log(\`[calculatePageRanks] Starting with \${numNodes} nodes.\`);
+        let ranks = Array(numNodes).fill(1.0 / numNodes);
+        console.log(\`[calculatePageRanks] Initial ranks array size: \${ranks.length}\`);
+        console.log(\`[calculatePageRanks] Initial rankedDefinitions map size: \${this.rankedDefinitions.size}\`);
+    `;
 
       (fs.readFile as Mock).mockResolvedValue(fileContent);
       (fs.writeFile as Mock).mockResolvedValue(undefined);

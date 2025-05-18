@@ -205,11 +205,13 @@ export class FileEditor {
     let divergedMessage: string | undefined;
     let divergenceAfterX = 0;
 
-    console.error(normFileLines);
+    // console.error(normFileLines);
 
+    // console.log({ isSingleLineReplacement });
     for (const [index, normLine] of normFileLines.entries()) {
       if (typeof startLineArg !== `undefined` && index + 1 < startLineArg)
         continue;
+      // console.log(index, normLine, oldLines[0]);
       // this line is equal to the first line in our from replacement. Lets check each following line to see if we match
       const firstDistance = distance(oldLines[0], normLine);
       const firstPercentDiff = (firstDistance / normLine.length) * 100;
