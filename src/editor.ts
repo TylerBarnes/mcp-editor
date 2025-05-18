@@ -108,23 +108,27 @@ export class FileEditor {
     }
 
     private undoubleEscape(input: string) {
-        return input.replace(/("([^"\\]|\\.)*"|'([^'\\]|\\.)*'|`([^`\\]|\\.)*`)|\\n|\\r|\\t|\\"|\\'/g, match => {
-            if (
-                match.startsWith('"') ||
-                match.startsWith("'") ||
-                match.startsWith('`')
-            ) {
-                return match; // skip unescaping inside quoted or backticked strings
+        return input.replace(
+            /("([^"\\]|\\.)*"|'([^'\\]|\\.)*'|`([^`\\]|\\.)*`)|\\n|\\r|\\t|\\"|\\'|\\`/g,
+            match => {
+                if (
+                    match.startsWith('"') ||
+                    match.startsWith("'") ||
+                    match.startsWith('`')
+                ) {
+                    return match; // skip unescaping inside quoted or backticked strings
+                }
+                // outside of quotes/backticks: unescape
+                return match
+                    .replace(/\\n/g, '\n')
+                    .replace(/\\r/g, '\r')
+                    .replace(/\\t/g, '\t')
+                    .replace(/\\"/g, '"')
+                    .replace(/\\'/g, "'")
+                    .replace(/\\`/g, '`');
             }
-            // outside of quotes/backticks: unescape
-            return match
-                .replace(/\\n/g, '\n')
-                .replace(/\\r/g, '\r')
-                .replace(/\\t/g, '\t')
-                .replace(/\\"/g, '"')
-               .replace(/\\'/g, "'");
-        });
-    }
+        );
+}
 
     async strReplace(args: StringReplaceArgs): Promise<string> {
         await validatePath('string_replace', args.path);
@@ -173,6 +177,8 @@ export class FileEditor {
         let divergedMessage: string | undefined 
         let divergenceAfterX = 0
 
+        console.error(normFileLines)
+
         for (const [index, normLine] of normFileLines.entries()) {
             if (typeof startLineArg !== `undefined` && index + 1 < startLineArg) continue
             // this line is equal to the first line in our from replacement. Lets check each following line to see if we match
@@ -181,10 +187,11 @@ export class FileEditor {
             if (firstPercentDiff < 10 && firstPercentDiff > 0) {
                 console.error({ firstPercentDiff, firstDistance, lineLength: normLine.length })
             }
-            // if (isSingleLineReplacement && (normLine === oldLines[0] || normLine.includes(oldLines[0]))) {
-            //    bestMatch.start = index 
-            //    bestMatch.type = "replace-in-line"
-            // } else
+            if (isSingleLineReplacement && (normLine === oldLines[0] || normLine.includes(oldLines[0]))) {
+               bestMatch.start = index 
+               bestMatch.type = "replace-in-line"
+                continue
+            } 
             if (oldLines[0] === normLine || firstPercentDiff < 5) {
                 let isMatching = true
                 let matchingLineCount = 0
@@ -239,7 +246,6 @@ export class FileEditor {
         // }
 
         let newFileContent = ``
-        // if (bestMatch.type === `replace-lines`) {
         if (bestMatch.start === -1) {
             // if (bestMatch.avgDist > threshold || bestMatch.start === -1) {
             throw new ToolError(
@@ -248,6 +254,7 @@ ${divergedMessage ? divergedMessage : ``}Try adjusting your input or the file co
             );
         }
 
+        if (bestMatch.type === `replace-lines`) {
         // Replace the original lines in fileLines from bestMatch.start to bestMatch.start + oldLines.length
         const newFileLines = [
             ...fileLines.slice(0, bestMatch.start),
@@ -257,16 +264,16 @@ ${divergedMessage ? divergedMessage : ``}Try adjusting your input or the file co
         newFileContent = newFileLines.join('\n');
         await writeFile(args.path, newFileContent);
 
-        // }  
-        // else if (bestMatch.type === `replace-in-line`) {
-        // const newFileLines = [
-        //     ...fileLines.slice(0, bestMatch.start),
-        //     fileLines.at(bestMatch.start)!.replace(oldLines[0], newStr),
-        //     ...fileLines.slice(bestMatch.start + 1)
-        // ];
-        // newFileContent = newFileLines.join('\n');
-        // await writeFile(args.path, newFileContent);
-        // }
+        }  
+        else if (bestMatch.type === `replace-in-line`) {
+        const newFileLines = [
+            ...fileLines.slice(0, bestMatch.start),
+            fileLines.at(bestMatch.start)!.replace(oldLines[0], newStr),
+            ...fileLines.slice(bestMatch.start + 1)
+        ];
+        newFileContent = newFileLines.join('\n');
+        await writeFile(args.path, newFileContent);
+        }
 
         if (!this.fileHistory[args.path]) {
             this.fileHistory[args.path] = [];
@@ -293,7 +300,7 @@ ${divergedMessage ? divergedMessage : ``}Try adjusting your input or the file co
         await validatePath('insert', args.path);
 
         const fileContent = await readFile(args.path);
-        const newStr = args.new_str.replace(/\t/g, '    ').replace(/\\t/g, `    `);
+        const newStr = this.undoubleEscape(args.new_str);
         const fileLines = fileContent.split('\n');
         const nLinesFile = fileLines.length;
 
@@ -305,15 +312,15 @@ ${divergedMessage ? divergedMessage : ``}Try adjusting your input or the file co
 
         const newStrLines = newStr.split('\n');
         const newFileLines = [
-            ...fileLines.slice(0, args.insert_line),
+            ...fileLines.slice(0, args.insert_line+1),
             ...newStrLines,
-            ...fileLines.slice(args.insert_line)
+            ...fileLines.slice(args.insert_line+1)
         ];
 
         const snippetLines = [
-            ...fileLines.slice(Math.max(0, args.insert_line - SNIPPET_LINES), args.insert_line),
+            ...fileLines.slice(Math.max(0, args.insert_line - SNIPPET_LINES), args.insert_line+1),
             ...newStrLines,
-            ...fileLines.slice(args.insert_line, args.insert_line + SNIPPET_LINES)
+            ...fileLines.slice(args.insert_line+1, args.insert_line + SNIPPET_LINES)
         ];
 
         const newFileContent = newFileLines.join('\n');

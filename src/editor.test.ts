@@ -27,10 +27,11 @@ vi.doMock('./editor.js', async (importOriginal) => {
 
 import { promises as fs } from 'fs'; // fs will be the mocked version here
 import { ToolError } from './types.js';
+import { FileEditor } from './editor.js';
 
 // Actual test suite starts here
 describe('FileEditor', () => {
-  let editor: any;
+  let editor: FileEditor;
 
   beforeEach(async () => {
     const { FileEditor } = await import('./editor.js');
@@ -61,6 +62,51 @@ describe('FileEditor', () => {
      3\tAnother line.
 Review the changes and make sure they are as expected. Edit the file again if necessary.`)
     });
+
+    it('should replace string with different indentation using fuzzy matching', async () => {
+      const filePath = '/test/file.txt';
+      const oldStr = 'this.tagIndex.Definitions.keys()'; 
+      const newStr = 'this.tagIndex.definitions.keys()';
+
+      const fileContent = `for (const def of sortedDefinitions) {
+            const node = def.Key;
+            if (node >= this.tagGraph.GetGraph().Nodes.length) {
+                continue;
+            }
+
+            const nodePath = this.tagGraph.GetGraph().Nodes[node];
+
+            // Collect all definitions for this file
+            const fileTags: Tag[] = [];
+            // Iterate through all definitions to find tags for the current file
+            for (const definitionKey of this.tagIndex.Definitions.keys()) {
+                 const definitionTags = this.tagIndex.Definitions.get(definitionKey);
+                 if (definitionTags) {
+                     for (const tag of definitionTags) {
+                         if (tag.RelFname === nodePath) {
+                             fileTags.push(tag);
+                         }
+}
+
+                 }
+            }
+
+            // Add sorted by line number
+            fileTags.sort((a, b) => a.Line - b.Line);
+            tags.push(...fileTags);
+        }`;
+
+      (fs.readFile as Mock).mockResolvedValue(fileContent);
+      (fs.writeFile as Mock).mockResolvedValue(undefined);
+      (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+      const result = await editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr });
+
+      expect(fs.writeFile).toHaveBeenCalledWith(filePath, expect.stringContaining(newStr), 'utf8');
+      expect(result).toContain(`The file /test/file.txt has been edited.`)
+      expect(result).toContain(newStr)
+      expect(result).not.toContain(oldStr)
+    })
 
     describe('escaping (gemini loves to switch back and forth with double escaping)', () => {
       it('double escaped', async () => {
@@ -163,6 +209,25 @@ Review the changes and make sure they are as expected. Edit the file again if ne
       })
     })
   });
+
+  describe(`insert`, async () => {
+    it('backticks in function call strings are unescaped', async () => {
+        const filePath = '/test/file.txt';
+        const fileContent = 'This is a test.\t\nHello World\nAnother line.';
+
+        (fs.readFile as Mock).mockResolvedValue(fileContent);
+        (fs.writeFile as Mock).mockResolvedValue(undefined);
+        (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+        const result = await editor.insert({
+          path: filePath,
+          new_str: "console.log(\\`Processing file: ${relPath}\\`);",
+          insert_line: 3        
+        })
+        expect(result).toContain('console.log(`Processing file: ${relPath}`);\n');
+        expect(result).not.toContain('console.log(\\`Processing file: ${relPath}\\`);\n');
+      })
+  })
 
   it('should throw ToolError if no sufficiently close match is found', async () => {
     const filePath = '/test/file.txt';
