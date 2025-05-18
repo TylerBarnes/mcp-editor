@@ -108,17 +108,21 @@ export class FileEditor {
     }
 
     private undoubleEscape(input: string) {
-        return input.replace(/("([^"\\]|\\.)*"|'([^'\\]|\\.)*')|\\n|\\r|\\t|\\("|\\')/g, match => {
-            if (match.startsWith('"') || match.startsWith("'")) {
-                return match; // keep quoted strings as-is
+        return input.replace(/("([^"\\]|\\.)*"|'([^'\\]|\\.)*'|`([^`\\]|\\.)*`)|\\n|\\r|\\t|\\"|\\'/g, match => {
+            if (
+                match.startsWith('"') ||
+                match.startsWith("'") ||
+                match.startsWith('`')
+            ) {
+                return match; // skip unescaping inside quoted or backticked strings
             }
-            // outside of quotes: unescape
+            // outside of quotes/backticks: unescape
             return match
                 .replace(/\\n/g, '\n')
                 .replace(/\\r/g, '\r')
                 .replace(/\\t/g, '\t')
                 .replace(/\\"/g, '"')
-                .replace(/\\'/g, "'");
+               .replace(/\\'/g, "'");
         });
     }
 

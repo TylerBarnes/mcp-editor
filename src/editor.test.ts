@@ -25,7 +25,7 @@ vi.doMock('./editor.js', async (importOriginal) => {
 });
 
 
-import { promises as fs, mkdir } from 'fs'; // fs will be the mocked version here
+import { promises as fs } from 'fs'; // fs will be the mocked version here
 import { ToolError } from './types.js';
 
 // Actual test suite starts here
@@ -139,7 +139,7 @@ Review the changes and make sure they are as expected. Edit the file again if ne
         const filePath = '/test/file.txt';
         const oldStr = '\\nHello World\n"a string \\n that should be double escaped"\nAnother line.';
         const newStr = 'Hello Vitest\\n"a string \\n that is double escaped"\n';
-        const fileContent = 'This is a test.\nHello World\n"a string \\n that should be double escaped"\nAnother line.';
+        const fileContent = 'This is a test.\nHello World\n"a string \\n that should be double escaped"\nAnother line.\n`a string\\ninside backticks`\n\'a string\\n inside single quotes\'';
 
         (fs.readFile as Mock).mockResolvedValue(fileContent);
         (fs.writeFile as Mock).mockResolvedValue(undefined);
@@ -147,9 +147,19 @@ Review the changes and make sure they are as expected. Edit the file again if ne
 
         const result = await editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr });
 
-        const expectedNewContent = 'This is a test.\nHello Vitest\n"a string \\n that is double escaped"\n';
+        // test escaped chars in double quotes
+        // TODO: we shouldn't have a double newline after the first string here, right?
+        const expectedNewContent = 'This is a test.\nHello Vitest\n"a string \\n that is double escaped"\n\n`a string\\ninside backticks`\n\'a string\\n inside single quotes\'';
         expect(fs.writeFile).toHaveBeenCalledWith(filePath, expectedNewContent, 'utf8');
         expect(result).toContain('The file /test/file.txt has been edited');
+
+        // and in backticks
+        (fs.readFile as Mock).mockResolvedValue(expectedNewContent);
+        (fs.writeFile as Mock).mockResolvedValue(undefined);
+        const result2 = await editor.strReplace({ path: filePath, old_str: '\nHello Vitest\n"a string \\n that is double escaped"\n\n`a string\\ninside backticks`', new_str: '\nGoodbye Vitest\n"a string \\n that is definitely double escaped"\n\n`a string\\ninside backticks that still has the right escaping`'});
+        const expectedNewContent2 = 'This is a test.\n\nGoodbye Vitest\n"a string \\n that is definitely double escaped"\n\n`a string\\ninside backticks that still has the right escaping`\n\'a string\\n inside single quotes\''
+                expect(fs.writeFile).toHaveBeenCalledWith(filePath, expectedNewContent2, 'utf8');
+        expect(result2).toContain('The file /test/file.txt has been edited');
       })
     })
   });
