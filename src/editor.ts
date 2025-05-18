@@ -255,24 +255,24 @@ ${divergedMessage ? divergedMessage : ``}Try adjusting your input or the file co
         }
 
         if (bestMatch.type === `replace-lines`) {
-        // Replace the original lines in fileLines from bestMatch.start to bestMatch.start + oldLines.length
-        const newFileLines = [
-            ...fileLines.slice(0, bestMatch.start),
-            ...(newStr ? newStr.split('\n') : []),
-            ...fileLines.slice(bestMatch.start + oldLines.length)
-        ];
-        newFileContent = newFileLines.join('\n');
-        await writeFile(args.path, newFileContent);
-
+            // Replace the original lines in fileLines from bestMatch.start to bestMatch.start + oldLines.length
+            const newFileLines = [
+                ...fileLines.slice(0, bestMatch.start),
+                ...(newStr ? newStr.split('\n') : []),
+                ...fileLines.slice(bestMatch.start + oldLines.length)
+            ];
+            newFileContent = newFileLines.join('\n');
+            await writeFile(args.path, newFileContent);
         }  
         else if (bestMatch.type === `replace-in-line`) {
-        const newFileLines = [
-            ...fileLines.slice(0, bestMatch.start),
-            fileLines.at(bestMatch.start)!.replace(oldLines[0], newStr),
-            ...fileLines.slice(bestMatch.start + 1)
-        ];
-        newFileContent = newFileLines.join('\n');
-        await writeFile(args.path, newFileContent);
+            const [firstNew,...restNew] = newStr ? newStr.split('\n') : []
+            const newFileLines = [
+                ...fileLines.slice(0, bestMatch.start),
+                ...(restNew.length ? [firstNew, ...restNew]: [fileLines.at(bestMatch.start)!.replace(oldLinesOriginal[0], firstNew)]),
+                ...fileLines.slice(bestMatch.start + 1)
+            ];
+            newFileContent = newFileLines.join('\n');
+            await writeFile(args.path, newFileContent);
         }
 
         if (!this.fileHistory[args.path]) {

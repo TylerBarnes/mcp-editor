@@ -63,7 +63,7 @@ describe('FileEditor', () => {
 Review the changes and make sure they are as expected. Edit the file again if necessary.`)
     });
 
-    it('should replace string with different indentation using fuzzy matching', async () => {
+    it('should replace partial single line matches', async () => {
       const filePath = '/test/file.txt';
       const oldStr = 'this.tagIndex.Definitions.keys()'; 
       const newStr = 'this.tagIndex.definitions.keys()';
@@ -106,6 +106,64 @@ Review the changes and make sure they are as expected. Edit the file again if ne
       expect(result).toContain(`The file /test/file.txt has been edited.`)
       expect(result).toContain(newStr)
       expect(result).not.toContain(oldStr)
+    })
+
+    it('should replace partial single line matches', async () => {
+      const fileContent = `
+describe('TagIndex', () => {
+  Existing test for language loading
+  it('should load supported languages', () => {
+    const tagIndex = new TagIndex('./testdata/repo'); // Pass a dummy path
+    const loadedLanguages = tagIndex.getLoadedLanguages();
+`;
+      const oldStr = 'it(\'should load supported languages\', () => {'; 
+      const newStr = 'it(\'should load supported languages\', async () => {';
+
+      (fs.readFile as Mock).mockResolvedValue(fileContent);
+      (fs.writeFile as Mock).mockResolvedValue(undefined);
+      (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+      const filePath = '/test/file.txt';
+
+      const result = await editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr });
+
+      expect(fs.writeFile).toHaveBeenCalledWith(filePath, expect.stringContaining(newStr), 'utf8');
+      expect(result).toContain(`The file /test/file.txt has been edited.`)
+      expect(result).toContain(newStr)
+      expect(result).not.toContain(oldStr)
+    })
+
+    it('should replace single line matches where the new string has multiple lines', async () => {
+      const filePath = '/test/file.txt';
+      const oldStr = '  public getLoadedLanguages(): Record<string, Parser.Language> {'; 
+      const newStr = '  public async init(): Promise<void> {\n    await this.loadLanguages();\n  }\n\n  public getLoadedLanguages(): Record<string, Parser.Language> {';
+
+      const fileContent = `
+public getCommonTags(): Set<string> {
+    return this.commonTags;
+  }
+
+public getFileToTags(): Map<string, Set<string>> {
+    return this.fileToTags;
+  }
+
+  public getLoadedLanguages(): Record<string, Parser.Language> {
+      return this.languages;
+  }
+}
+`;
+
+      (fs.readFile as Mock).mockResolvedValue(fileContent);
+      (fs.writeFile as Mock).mockResolvedValue(undefined);
+      (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+      const result = await editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr });
+
+      expect(fs.writeFile).toHaveBeenCalledWith(filePath, expect.stringContaining(newStr), 'utf8');
+      expect(result).toContain(`The file /test/file.txt has been edited.`)
+      for (const line of newStr.split(`\n`)) {
+        expect(result).toContain(line)
+      }
     })
 
     describe('escaping (gemini loves to switch back and forth with double escaping)', () => {
@@ -440,6 +498,7 @@ Review the changes and make sure they are as expected. Edit the file again if ne
       it('should throw if view_range is used on a directory', async () => {
         const dirPath = '/test/dir';
         (fs.stat as Mock).mockResolvedValue({ isFile: () => false, isDirectory: () => true });
+        // @ts-expect-error accessing private property
         editor.execAsync = vi.fn().mockResolvedValue({ stdout: '', stderr: '' });
         await expect(editor.view({ path: dirPath, view_range: [1, 2] }))
           .rejects.toThrow(/view_range.*not allowed.*directory/);
@@ -498,6 +557,7 @@ Review the changes and make sure they are as expected. Edit the file again if ne
       (fs.stat as Mock).mockResolvedValue({ isFile: () => false, isDirectory: () => true });
 
       // Set the execAsync mock for this instance
+      // @ts-expect-error accessing private property
       editor.execAsync = vi.fn().mockResolvedValue({ stdout: dirListing, stderr: '' });
 
       const result = await editor.view({ path: dirPath });
