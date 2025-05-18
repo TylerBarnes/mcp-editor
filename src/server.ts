@@ -104,28 +104,29 @@ class EditorServer {
                             required: ["path", "old_str"]
                         }
                     },
-                    {
-                        name: "insert",
-                        description: "Insert text at a specific line in the file",
-                        inputSchema: {
-                            type: "object",
-                            properties: {
-                                path: {
-                                    type: "string",
-                                    description: "Absolute path to the file"
-                                },
-                                insert_line: {
-                                    type: "number",
-                                    description: "Line number where text should be inserted"
-                                },
-                                new_str: {
-                                    type: "string",
-                                    description: "Text to insert"
-                                }
-                            },
-                            required: ["path", "insert_line", "new_str"]
-                        }
-                    },
+                    // TODO: insert needs work. The agent doesn't understand if it's going to insert after the line, replace it, or put it before the line.
+                    // {
+                    //     name: "insert",
+                    //     description: "Insert text at a specific line in the file",
+                    //     inputSchema: {
+                    //         type: "object",
+                    //         properties: {
+                    //             path: {
+                    //                 type: "string",
+                    //                 description: "Absolute path to the file"
+                    //             },
+                    //             insert_line: {
+                    //                 type: "number",
+                    //                 description: "Line number where text should be inserted"
+                    //             },
+                    //             new_str: {
+                    //                 type: "string",
+                    //                 description: "Text to insert"
+                    //             }
+                    //         },
+                    //         required: ["path", "insert_line", "new_str"]
+                    //     }
+                    // },
                     {
                         name: "undo_edit",
                         description: "Undo the last edit to a file",
