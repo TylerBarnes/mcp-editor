@@ -141,6 +141,12 @@ export class FileEditor {
     let oldStr = this.undoubleEscape(args.old_str);
     let newStr = this.undoubleEscape(args.new_str || "");
 
+    if (oldStr.startsWith(`\\\n`)) {
+      oldStr = oldStr.substring(`\\\n`.length);
+    }
+    if (newStr.startsWith(`\\\n`)) {
+      newStr = newStr.substring(`\\\n`.length);
+    }
     const startLineArg =
       typeof args.start_line === `number`
         ? Math.max(args.start_line - 1, 0)

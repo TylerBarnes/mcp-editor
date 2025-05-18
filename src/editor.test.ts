@@ -212,6 +212,51 @@ public getFileToTags(): Map<string, Set<string>> {
       }
     });
 
+    it("should replace matches where the model adds an extra \\ at the beginning of the match", async () => {
+      const filePath = "/test/file.txt";
+      const oldStr = "\\\n  public calculatePageRanks(): number[] | null {\n";
+      const newStr =
+        "\\\n  public calculatePageRanks(): number[] | string[] {\n";
+
+      const fileContent = `
+    public calculatePageRanks(): number[] | null {
+    const numNodes = this.graph.numNodes();
+    if (numNodes === 0) {
+      return null;
+    }
+
+    console.log(\`[calculatePageRanks] Starting with \${numNodes} nodes.\`);
+    let ranks = Array(numNodes).fill(1.0 / numNodes);
+    console.log(\`[calculatePageRanks] Initial ranks array size: \${ranks.length}\`);
+    console.log(\`[calculatePageRanks] Initial rankedDefinitions map size: \${this.rankedDefinitions.size}\`);
+`;
+
+      (fs.readFile as Mock).mockResolvedValue(fileContent);
+      (fs.writeFile as Mock).mockResolvedValue(undefined);
+      (fs.stat as Mock).mockResolvedValue({
+        isFile: () => true,
+        isDirectory: () => false,
+      });
+
+      const result = await editor.strReplace({
+        path: filePath,
+        old_str: oldStr,
+        new_str: newStr,
+      });
+
+      expect(fs.writeFile).toHaveBeenCalledWith(
+        filePath,
+        expect.stringContaining(
+          `public calculatePageRanks(): number[] | string[] {`,
+        ),
+        "utf8",
+      );
+      expect(result).toContain(`The file /test/file.txt has been edited.`);
+      expect(result).toContain(
+        `public calculatePageRanks(): number[] | string[] {`,
+      );
+    });
+
     describe("escaping (gemini loves to switch back and forth with double escaping)", () => {
       it("double escaped", async () => {
         const filePath = "/test/file.txt";
