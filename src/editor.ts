@@ -137,15 +137,16 @@ export class FileEditor {
 
         // Split and normalize
         const oldLinesSplit = oldStr.split('\n')
-        const oldLines = oldLinesSplit.map(removeWhitespace).filter((l, i) => {
-            if (i === 0) return l !== ``
+        const oldLinesOriginal = oldLinesSplit.filter((l, i) => {
+            if (i === 0) return removeWhitespace(l) !== ``
             if (i + 1 !== oldLinesSplit.length) return true
             // only keep last item if it's not an empty string
-            return l !== ``
+            return removeWhitespace(l) !== ``
         });
+        const oldLines = oldLinesOriginal.map(removeWhitespace)
         const fileLines = fileContent.split('\n');
         const normFileLines = fileLines.map(removeWhitespace);
-        const threshold = Math.max(2, Math.floor(oldStr.length * 0.1));
+        // const threshold = Math.max(2, Math.floor(oldStr.length * 0.1));
 
         let bestMatch: { start: number, avgDist: number, type: "replace-lines" | "replace-in-line" } = { start: -1, avgDist: Infinity, type: "replace-lines" };
 
@@ -168,6 +169,9 @@ export class FileEditor {
         if ((escapeCountNew?.length || 0) > 40) {
             throw new ToolError(`Found more than 40 backslash characters in the new_str. This indicates the input string has been escaped instead of passed in directly.`)
         }
+
+        let divergedMessage: string | undefined 
+        let divergenceAfterX = 0
 
         for (const [index, normLine] of normFileLines.entries()) {
             if (typeof startLineArg !== `undefined` && index + 1 < startLineArg) continue
@@ -203,7 +207,13 @@ export class FileEditor {
                         // all good! we're matching
                         console.error(`matching ${index + matchIndex}`)
                     } else {
-                        console.error(`diverged after ${matchingLineCount} lines.\nExpected line: ${oldLine}, found line: ${innerNormLine}. ${remainingLines} lines were remaining`)
+                        const message = `old_str matching diverged after ${matchingLineCount} matching lines.\nExpected line from old_str: \`${oldLinesOriginal[matchIndex]}\` (line ${matchIndex + 1} in old_str), found line: \`${fileLines[matchIndex]}\` (line ${index + 1 +matchIndex} in file). ${remainingLines-1} lines remained to compare but they were not checked due to this line not matching.\n`
+                        console.error(message)
+                        // tell the llm about the longest matching string so it can adjust the next input
+                        if (matchingLineCount > divergenceAfterX) {
+                            divergenceAfterX = matchingLineCount
+                            divergedMessage = message 
+                        }
                         // we could also do levenstein here
                         isMatching = false
                         // we diverged
@@ -233,7 +243,8 @@ export class FileEditor {
         if (bestMatch.start === -1) {
             // if (bestMatch.avgDist > threshold || bestMatch.start === -1) {
             throw new ToolError(
-                `No replacement was performed. No sufficiently close match for old_str \`${args.old_str}\` found in ${args.path}. Fuzziness threshold: ${threshold}, closest average distance: ${bestMatch.avgDist}. Try adjusting your input or the file content.`
+                `No replacement was performed. No sufficiently close match for old_str found in ${args.path}.
+${divergedMessage ? divergedMessage : ``}Try adjusting your input or the file content.`
             );
         }
 

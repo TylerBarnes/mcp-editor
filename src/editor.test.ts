@@ -179,6 +179,21 @@ Review the changes and make sure they are as expected. Edit the file again if ne
       .rejects.toThrow(/No replacement was performed/);
   });
 
+  it('should throw ToolError with divergence message if matching lines were found for multiple lines before diverging', async () => {
+    const filePath = '/test/file.txt';
+    const oldStr = 'This is a test.\nHello World\n  Another line.. so close\nAnd another.';
+    const newStr = 'ThisShouldNotReplace';
+    const fileContent = 'This is a test.\nHello World\n\tAnother line.\nAnd another.\nAnd one more..';
+
+    (fs.readFile as Mock).mockResolvedValue(fileContent);
+    (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+    await expect(editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr }))
+      .rejects.toThrow(ToolError);
+    await expect(editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr }))
+      .rejects.toThrow(`No replacement was performed. No sufficiently close match for old_str found in /test/file.txt.\nold_str matching diverged after 2 matching lines.\nExpected line from old_str: \`  Another line.. so close\` (line 3 in old_str), found line: \`\tAnother line.\` (line 3 in file). 1 lines remained to compare but they were not checked due to this line not matching.\nTry adjusting your input or the file content.`);
+  })
+
 
   it('should perform multi-line replacement with fuzzy matching and different indentation', async () => {
     const filePath = '/test/multiline.txt';
