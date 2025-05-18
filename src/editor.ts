@@ -8,6 +8,7 @@ function removeWhitespace(str: string): string {
         .replace(/ +/g, '')           // collapse multiple spaces
         .replace(/^ +| +$/gm, '')      // trim each line
         .replace(/\r?\n/g, '\n')
+        .replace(/\s/g, '')
         // @ts-ignore
         .replaceAll(`\\n`, `\n`);   // normalize newlines
 }
@@ -127,17 +128,17 @@ export class FileEditor {
             }
         }
 
-        const escapeCountOld = oldStr.split(`\n`).join(``).match(/\\/g)
+        const escapeCountOld = oldStr.split(`\n`).join(``).match(/\\\\/g)
 
-        if ((escapeCountOld?.length || 0) > 10) {
-            throw new ToolError(`Found more than 10 backslash characters in the old_str. This indicates the input string has been escaped instead of passed in directly.`)
+        if ((escapeCountOld?.length || 0) > 40) {
+            throw new ToolError(`Found more than 40 backslash characters in the old_str. This indicates the input string has been escaped instead of passed in directly.`)
         }
 
 
         const escapeCountNew = newStr.split(`\n`).join(``).match(/\\/g)
 
-        if ((escapeCountNew?.length || 0) > 10) {
-            throw new ToolError(`Found more than 10 backslash characters in the new_str. This indicates the input string has been escaped instead of passed in directly.`)
+        if ((escapeCountNew?.length || 0) > 40) {
+            throw new ToolError(`Found more than 40 backslash characters in the new_str. This indicates the input string has been escaped instead of passed in directly.`)
         }
 
         for (const [index, normLine] of normFileLines.entries()) {
@@ -177,7 +178,7 @@ export class FileEditor {
         // }
 
         if (bestMatch.start === -1) {
-        // if (bestMatch.avgDist > threshold || bestMatch.start === -1) {
+            // if (bestMatch.avgDist > threshold || bestMatch.start === -1) {
             throw new ToolError(
                 `No replacement was performed. No sufficiently close match for old_str \`${args.old_str}\` found in ${args.path}. Fuzziness threshold: ${threshold}, closest average distance: ${bestMatch.avgDist}. Try adjusting your input or the file content.`
             );
