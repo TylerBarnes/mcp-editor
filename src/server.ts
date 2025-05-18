@@ -5,7 +5,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import {
     CreateArgs,
     isCreateArgs,
-    // isInsertArgs,
+    isInsertArgs,
     isStrReplaceArgs,
     isUndoEditArgs,
     isViewArgs,
@@ -100,28 +100,28 @@ class EditorServer {
                             required: ["path", "old_str"]
                         }
                     },
-                    // {
-                    //     name: "insert",
-                    //     description: "Insert text at a specific line in the file",
-                    //     inputSchema: {
-                    //         type: "object",
-                    //         properties: {
-                    //             path: {
-                    //                 type: "string",
-                    //                 description: "Absolute path to the file"
-                    //             },
-                    //             insert_line: {
-                    //                 type: "number",
-                    //                 description: "Line number where text should be inserted"
-                    //             },
-                    //             new_str: {
-                    //                 type: "string",
-                    //                 description: "Text to insert"
-                    //             }
-                    //         },
-                    //         required: ["path", "insert_line", "new_str"]
-                    //     }
-                    // },
+                    {
+                        name: "insert",
+                        description: "Insert text at a specific line in the file",
+                        inputSchema: {
+                            type: "object",
+                            properties: {
+                                path: {
+                                    type: "string",
+                                    description: "Absolute path to the file"
+                                },
+                                insert_line: {
+                                    type: "number",
+                                    description: "Line number where text should be inserted"
+                                },
+                                new_str: {
+                                    type: "string",
+                                    description: "Text to insert"
+                                }
+                            },
+                            required: ["path", "insert_line", "new_str"]
+                        }
+                    },
                     {
                         name: "undo_edit",
                         description: "Undo the last edit to a file",
@@ -168,12 +168,12 @@ class EditorServer {
                             }
                             result = await this.editor.strReplace(request.params.arguments);
                             break;
-                        // case "insert":
-                        //     if (!request.params.arguments || !isInsertArgs(request.params.arguments)) {
-                        //         throw new ToolError("Invalid arguments for insert command");  // Fixed
-                        //     }
-                        //     result = await this.editor.insert(request.params.arguments);
-                        //     break;
+                        case "insert":
+                            if (!request.params.arguments || !isInsertArgs(request.params.arguments)) {
+                                throw new ToolError("Invalid arguments for insert command");  // Fixed
+                            }
+                            result = await this.editor.insert(request.params.arguments);
+                            break;
                         case "undo_edit":
                             if (!request.params.arguments || !isUndoEditArgs(request.params.arguments)) {
                                 throw new ToolError("Invalid arguments for undo_edit command");  // Fixed
