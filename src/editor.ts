@@ -107,31 +107,34 @@ export class FileEditor {
         return `File created successfully at: ${args.path}`;
     }
 
+    private undoubleEscape(input: string) {
+        return input.replace(/("([^"\\]|\\.)*"|'([^'\\]|\\.)*')|\\n|\\r|\\t|\\("|\\')/g, match => {
+            if (match.startsWith('"') || match.startsWith("'")) {
+                return match; // keep quoted strings as-is
+            }
+            // outside of quotes: unescape
+            return match
+                .replace(/\\n/g, '\n')
+                .replace(/\\r/g, '\r')
+                .replace(/\\t/g, '\t')
+                .replace(/\\"/g, '"')
+                .replace(/\\'/g, "'");
+        });
+    }
+
     async strReplace(args: StringReplaceArgs): Promise<string> {
         await validatePath('string_replace', args.path);
 
         const fileContent = await readFile(args.path);
-        let oldStr = args.old_str.replace(`\\n`, `\n`)
-        let newStr = (args.new_str || "").replace(`\\n`, `\n`)
+        let oldStr = this.undoubleEscape(args.old_str)
+        let newStr = this.undoubleEscape(args.new_str || "")
+
         const startLineArg = typeof args.start_line === `number` ? Math.max(args.start_line - 1, 0) : undefined
-
-        // gemini loves adding a broken initial like starting with \+\n for some reason
-        if (oldStr.startsWith(`\\\n`)) {
-            oldStr = oldStr.substring(`\\`.length)
-        }
-        if (newStr.startsWith(`\\\n`)) {
-            newStr = newStr.substring(`\\`.length)
-        }
-        // if (oldStr.endsWith(`\\n`)) {
-        //     // if we add an extra blankline it will try to match an empty string line instead of the next line, so remove the trailing \
-        //     // there may be a better way to do this
-        //     oldStr = oldStr.substring(oldStr.length, -(`\\n`.length))
-        // }
-
 
         // Split and normalize
         const oldLinesSplit = oldStr.split('\n')
         const oldLines = oldLinesSplit.map(removeWhitespace).filter((l, i) => {
+            if (i === 0) return l !== ``
             if (i + 1 !== oldLinesSplit.length) return true
             // only keep last item if it's not an empty string
             return l !== ``

@@ -9,6 +9,7 @@ vi.mock('fs', async () => {
       ...(actualFs.promises as any),
       readFile: vi.fn(),
       writeFile: vi.fn(),
+      mkdir: vi.fn(),
       stat: vi.fn(),
     },
   };
@@ -24,7 +25,7 @@ vi.doMock('./editor.js', async (importOriginal) => {
 });
 
 
-import { promises as fs } from 'fs'; // fs will be the mocked version here
+import { promises as fs, mkdir } from 'fs'; // fs will be the mocked version here
 import { ToolError } from './types.js';
 
 // Actual test suite starts here
@@ -42,9 +43,9 @@ describe('FileEditor', () => {
   describe('strReplace', () => {
     it('should replace string with different indentation using fuzzy matching', async () => {
       const filePath = '/test/file.txt';
-      const oldStr = '  Hello World  '; // Has leading/trailing spaces
-      const newStr = 'Hello Vitest';
-      const fileContent = 'This is a test.\nHello World\nAnother line.'; // No leading/trailing spaces
+      const oldStr = '  Hello World\n     Another line.'; // Has leading/trailing spaces
+      const newStr = 'Hello Vitest\nAnother line.';
+      const fileContent = 'This is a test.\nHello World\n\t\tAnother line.'; // No leading/trailing spaces
 
       (fs.readFile as Mock).mockResolvedValue(fileContent);
       (fs.writeFile as Mock).mockResolvedValue(undefined);
@@ -54,11 +55,105 @@ describe('FileEditor', () => {
 
       const expectedNewContent = 'This is a test.\nHello Vitest\nAnother line.';
       expect(fs.writeFile).toHaveBeenCalledWith(filePath, expectedNewContent, 'utf8');
-      expect(result).toContain('Levenshtein average distance for match');
-      expect(result).toContain('has been edited');
+      expect(result).toEqual(`The file /test/file.txt has been edited. Here's the result of running \`cat -n\` on a snippet of /test/file.txt:
+     1\tThis is a test.
+     2\tHello Vitest
+     3\tAnother line.
+Review the changes and make sure they are as expected. Edit the file again if necessary.`)
     });
 
+    describe('escaping (gemini loves to switch back and forth with double escaping)', () => {
+      it('double escaped', async () => {
+        const filePath = '/test/file.txt';
+        const oldStr = '\\nHello World\\nAnother line.';
+        const newStr = 'Hello Vitest\\n';
+        const fileContent = 'This is a test.\nHello World\nAnother line.';
+
+        (fs.readFile as Mock).mockResolvedValue(fileContent);
+        (fs.writeFile as Mock).mockResolvedValue(undefined);
+        (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+        const result = await editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr });
+
+        const expectedNewContent = 'This is a test.\nHello Vitest\n';
+        expect(fs.writeFile).toHaveBeenCalledWith(filePath, expectedNewContent, 'utf8');
+        expect(result).toContain('The file /test/file.txt has been edited');
+
+      })
+
+      it('regular escaped old, double escaped new', async () => {
+        const filePath = '/test/file.txt';
+        const oldStr = '\nHello World\nAnother line.';
+        const newStr = 'Hello Vitest\\n';
+        const fileContent = 'This is a test.\nHello World\nAnother line.';
+
+        (fs.readFile as Mock).mockResolvedValue(fileContent);
+        (fs.writeFile as Mock).mockResolvedValue(undefined);
+        (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+        const result = await editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr });
+
+        const expectedNewContent = 'This is a test.\nHello Vitest\n';
+        expect(fs.writeFile).toHaveBeenCalledWith(filePath, expectedNewContent, 'utf8');
+        expect(result).toContain('The file /test/file.txt has been edited');
+
+      })
+
+      it('double escaped old, regular escaped new', async () => {
+        const filePath = '/test/file.txt';
+        const oldStr = '\\nHello World\\nAnother line.';
+        const newStr = 'Hello Vitest\n';
+        const fileContent = 'This is a test.\nHello World\nAnother line.';
+
+        (fs.readFile as Mock).mockResolvedValue(fileContent);
+        (fs.writeFile as Mock).mockResolvedValue(undefined);
+        (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+        const result = await editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr });
+
+        const expectedNewContent = 'This is a test.\nHello Vitest\n';
+        expect(fs.writeFile).toHaveBeenCalledWith(filePath, expectedNewContent, 'utf8');
+        expect(result).toContain('The file /test/file.txt has been edited');
+
+      })
+
+      it('mixed double escaping', async () => {
+        const filePath = '/test/file.txt';
+        // TODO: because we split on newlines and compare one line at a time, replacing whitespace at the start/end of the string doesn't actually work. in our editor tool we need to check for this and join the split array items into a single line for this to work
+        const oldStr = '\t\\nHello World\nAnother line.';
+        const newStr = 'Hello Vitest\\nwhat up\n';
+        const fileContent = 'This is a test.\t\nHello World\nAnother line.';
+
+        (fs.readFile as Mock).mockResolvedValue(fileContent);
+        (fs.writeFile as Mock).mockResolvedValue(undefined);
+        (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+        const result = await editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr });
+
+        const expectedNewContent = 'This is a test.\t\nHello Vitest\nwhat up\n';
+        expect(fs.writeFile).toHaveBeenCalledWith(filePath, expectedNewContent, 'utf8');
+        expect(result).toContain('The file /test/file.txt has been edited');
+      })
+
+      it('nested escaping', async () => {
+        const filePath = '/test/file.txt';
+        const oldStr = '\\nHello World\n"a string \\n that should be double escaped"\nAnother line.';
+        const newStr = 'Hello Vitest\\n"a string \\n that is double escaped"\n';
+        const fileContent = 'This is a test.\nHello World\n"a string \\n that should be double escaped"\nAnother line.';
+
+        (fs.readFile as Mock).mockResolvedValue(fileContent);
+        (fs.writeFile as Mock).mockResolvedValue(undefined);
+        (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
+
+        const result = await editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr });
+
+        const expectedNewContent = 'This is a test.\nHello Vitest\n"a string \\n that is double escaped"\n';
+        expect(fs.writeFile).toHaveBeenCalledWith(filePath, expectedNewContent, 'utf8');
+        expect(result).toContain('The file /test/file.txt has been edited');
+      })
+    })
   });
+
   it('should throw ToolError if no sufficiently close match is found', async () => {
     const filePath = '/test/file.txt';
     const oldStr = 'NonExistentString';
