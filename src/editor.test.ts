@@ -184,7 +184,13 @@ Review the changes and make sure they are as expected. Edit the file again if ne
 
     const expectedNewContent = 'Some text before\nNew first line\nNew second line\nNew third line\nSome text after';
     expect(fs.writeFile).toHaveBeenCalledWith(filePath, expectedNewContent, 'utf8');
-    expect(result).toContain('Levenshtein average distance for match');
+    expect(result).toEqual(`The file /test/multiline.txt has been edited. Here's the result of running \`cat -n\` on a snippet of /test/multiline.txt:
+     1\tSome text before
+     2\tNew first line
+     3\tNew second line
+     4\tNew third line
+     5\tSome text after
+Review the changes and make sure they are as expected. Edit the file again if necessary.`)
     expect(result).toContain('has been edited');
   });
 
@@ -215,8 +221,10 @@ Review the changes and make sure they are as expected. Edit the file again if ne
 
     const expectedNewContent = 'Replaced line one\nReplaced line two';
     expect(fs.writeFile).toHaveBeenCalledWith(filePath, expectedNewContent, 'utf8');
-    expect(result).toContain('Levenshtein average distance for match');
-    expect(result).toContain('has been edited');
+    expect(result).toBe(`The file /test/tabs-vs-spaces.txt has been edited. Here's the result of running \`cat -n\` on a snippet of /test/tabs-vs-spaces.txt:
+     1\tReplaced line one
+     2\tReplaced line two
+Review the changes and make sure they are as expected. Edit the file again if necessary.`)
   });
 
   it('should delete the matched block if new_str is empty', async () => {
@@ -307,13 +315,14 @@ Review the changes and make sure they are as expected. Edit the file again if ne
         (fs.readFile as Mock).mockResolvedValue(fileContent);
       });
 
-      it('should throw ToolError if view_range is out of bounds', async () => {
+      it('should handle if view_range is out of bounds', async () => {
         const filePath = '/test/viewrange-outofbounds.txt';
         const fileContent = 'Line 1\nLine 2\nLine 3';
         (fs.readFile as Mock).mockResolvedValue(fileContent);
         (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
 
         // Start line < 1
+        // TODO: this is dumb, just change 0 to 1 so the tool works
         await expect(editor.view({ path: filePath, view_range: [0, 2] }))
           .rejects.toThrow(/Invalid `view_range`/);
 
@@ -325,9 +334,9 @@ Review the changes and make sure they are as expected. Edit the file again if ne
         await expect(editor.view({ path: filePath, view_range: [2, 1] }))
           .rejects.toThrow(/Invalid `view_range`/);
 
-        // End line > number of lines
+        // End line > number of lines, we just make end range last line instead of throwing
         await expect(editor.view({ path: filePath, view_range: [2, 10] }))
-          .rejects.toThrow(/Invalid `view_range`/);
+          .resolves.not.toThrow(/Invalid `view_range`/);
 
         (fs.stat as Mock).mockResolvedValue({ isFile: () => true, isDirectory: () => false });
 
@@ -407,11 +416,11 @@ Review the changes and make sure they are as expected. Edit the file again if ne
       expect(result).toContain(dirListing);
     });
 
-    // TODO: Add more tests:
-    // - Multi-line replacements with fuzzy matching
-    // - Cases where old_str is not found at all (very high distance)
-    // - Cases with tabs vs spaces
-    // - Replacement with an empty new_str (deletion)
-    // - File history and undo (though undo might need its own describe block)
+  // TODO: Add more tests:
+  // - Multi-line replacements with fuzzy matching
+  // - Cases where old_str is not found at all (very high distance)
+  // - Cases with tabs vs spaces
+  // - Replacement with an empty new_str (deletion)
+  // - File history and undo (though undo might need its own describe block)
   });
 });
