@@ -1,4 +1,4 @@
-import { promises as fs } from 'fs';
+import fsp from 'fs/promises';
 import * as path from 'path';
 import {ToolError} from "./types.js";
 
@@ -6,7 +6,7 @@ export const SNIPPET_LINES = 4;
 
 export async function readFile(filePath: string): Promise<string> {
     try {
-        return await fs.readFile(filePath, 'utf8');
+        return await fsp.readFile(filePath, 'utf8');
     } catch (e) {
         const error = e instanceof Error ? e : new Error('Unknown error');
         throw new Error(`Failed to read ${filePath}: ${error.message}`);
@@ -15,7 +15,8 @@ export async function readFile(filePath: string): Promise<string> {
 
 export async function writeFile(filePath: string, content: string): Promise<void> {
     try {
-        await fs.writeFile(filePath, content, 'utf8');
+        await fsp.mkdir(path.dirname(filePath), {recursive: true})
+        await fsp.writeFile(filePath, content, 'utf8');
     } catch (e) {
         const error = e instanceof Error ? e : new Error('Unknown error');
         throw new Error(`Failed to write to ${filePath}: ${error.message}`);
@@ -50,7 +51,7 @@ export async function validatePath(command: string, filePath: string): Promise<v
     }
 
     try {
-        const stats = await fs.stat(filePath);
+        const stats = await fsp.stat(filePath);
         if (stats.isDirectory() && command !== 'view') {
             throw new ToolError(
                 `The path ${filePath} is a directory and only the \`view\` command can be used on directories`
