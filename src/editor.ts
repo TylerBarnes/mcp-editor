@@ -152,8 +152,19 @@ export class FileEditor {
       throw new ToolError(`Received the same string for old_str and new_str`);
     }
     const fileContent = await readFile(args.path);
-    let oldStr = this.undoubleEscape(args.old_str);
-    let newStr = this.undoubleEscape(args.new_str || "");
+
+    // Remove leading line numbers and whitespace from each line
+    const removeLeadingLineNumbers = (str: string): string => {
+      return str
+        .split("\n")
+        .map((line) => line.replace(/^\s*\d+\s*/, ""))
+        .join("\n");
+    };
+
+    let oldStr = removeLeadingLineNumbers(this.undoubleEscape(args.old_str));
+    let newStr = removeLeadingLineNumbers(
+      this.undoubleEscape(args.new_str || ""),
+    );
 
     if (oldStr.startsWith(`\\\n`)) {
       oldStr = oldStr.substring(`\\\n`.length);

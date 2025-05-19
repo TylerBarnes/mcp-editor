@@ -553,6 +553,56 @@ func (ti *TagIndex) GenerateFromFiles(ctx context.Context, files map[string][]by
       );
     });
 
+    it("should handle old_str and new_str with leading line numbers", async () => {
+      const filePath = "/test/line-numbers.txt";
+      const oldStr = `181 -- vim.diagnostic.config({
+182 --     virtual_text = {
+183 --         severity = { min = vim.diagnostic.severity.ERROR, max = vim.diagnostic.severity.ERROR },
+184 --         format = function(diagnostic)
+185 --             return string.format("L%d: %s", diagnostic.lnum + 1, diagnostic.message)
+186 --         end,
+187 --     },
+188 -- Diagnostic keymaps`;
+      const newStr = `181 -- Diagnostic keymaps`;
+      const fileContent = `-- some code above
+-- vim.diagnostic.config({
+--    virtual_text = {
+--        severity = { min = vim.diagnostic.severity.ERROR, max = vim.diagnostic.severity.ERROR },
+--        format = function(diagnostic)
+--            return string.format("L%d: %s", diagnostic.lnum + 1, diagnostic.message)
+--        end,
+--    },
+-- Diagnostic keymaps
+vim.keymap.set("n", "<leader>do", function()
+-- some code below`;
+
+      (fs.readFile as Mock).mockResolvedValue(fileContent);
+      (fs.writeFile as Mock).mockResolvedValue(undefined);
+      (fs.stat as Mock).mockResolvedValue({
+        isFile: () => true,
+        isDirectory: () => false,
+      });
+
+      const result = await editor.strReplace({
+        path: filePath,
+        old_str: oldStr,
+        new_str: newStr,
+      });
+
+      const expectedNewContent = `-- some code above
+-- Diagnostic keymaps
+vim.keymap.set("n", "<leader>do", function()
+-- some code below`;
+      expect(fs.writeFile).toHaveBeenCalledWith(
+        filePath,
+        expectedNewContent,
+        "utf8",
+      );
+      expect(result).toContain(`The file ${filePath} has been edited.`);
+      expect(result).toContain(`-- Diagnostic keymaps`);
+      expect(result).not.toContain(`181 -- Diagnostic keymaps`);
+    });
+
     describe("escaping (gemini loves to switch back and forth with double escaping)", () => {
       it("double escaped", async () => {
         const filePath = "/test/file.txt";
