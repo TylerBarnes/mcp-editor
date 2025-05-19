@@ -471,7 +471,7 @@ func (ti *TagIndex) GenerateFromFiles(ctx context.Context, files map[string][]by
       tagIndex2,
     ])(
       "should replace single line matches where the new string has multiple lines 2",
-      async ({ toolResult, fileContent }) => {
+      async ({ toolResult, fileContent, assert }) => {
         (fs.readFile as Mock).mockResolvedValue(fileContent);
         (fs.writeFile as Mock).mockResolvedValue(undefined);
         (fs.stat as Mock).mockResolvedValue({
@@ -499,6 +499,9 @@ func (ti *TagIndex) GenerateFromFiles(ctx context.Context, files map[string][]by
           `The file ${toolResult.args.path} has been edited.`,
         );
         expect(result.replaceAll(`\t`, ``)).not.toContain(`  42\`;\n    43\`;`);
+        if (assert) {
+          assert(result);
+        }
         for (const line of newStr.split(`\n`)) {
           expect(result).toContain(line);
         }

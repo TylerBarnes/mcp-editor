@@ -84,7 +84,8 @@ class EditorServer {
         },
         {
           name: "string_replace",
-          description: "Replace a string in a file with a new string",
+          description:
+            "Replace a string in a file with a new string. If the old string contains newlines, matches by each full line. If the old string contains no newlines, it may contain a partial string search.",
           inputSchema: {
             type: "object",
             properties: {

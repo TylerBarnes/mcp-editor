@@ -21,6 +21,7 @@ type ToolResult = {
     };
   };
   fileContent: string;
+  assert?: (result?: string) => void;
 };
 
 export const treeContextFix: ToolResult = {
