@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "tsc -w",
-    "test": "vitest"
+    "test": "vitest --reporter=dot"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "latest",

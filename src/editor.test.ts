@@ -27,6 +27,12 @@ vi.doMock("./editor.js", async (importOriginal) => {
 import { promises as fs } from "fs"; // fs will be the mocked version here
 import { ToolError } from "./types.js";
 import { FileEditor } from "./editor.js";
+import {
+  fileSystemFix,
+  treeContext2,
+  treeContext3,
+  treeContextFix,
+} from "./__fixtures__/string-replace.js";
 
 // Actual test suite starts here
 describe("FileEditor", () => {
@@ -73,6 +79,28 @@ describe("FileEditor", () => {
      3\tAnother line.
 Review the changes and make sure they are as expected. Edit the file again if necessary.`);
     });
+
+    // {
+    //   "type": "tool-result",
+    //   "toolCallId": "3VUuRYQAxgnd0eZ9",
+    //   "toolName": "string_replace",
+    //   "args": {
+    //     "path": "nodejs/src/treeContext.ts",
+    //     "old_str": "\\\n        for (const lineNum of this.scopes[index]) {\n            // Find the node that starts at lineNum and has the largest range (represents the widest scope)\n            let widestNode: any | null = null;\n            let widestRange = -1; // Initialize with -1 to ensure any valid range is larger\n\n            if (this.nodes[lineNum]) { // Added check for undefined\n                 for (const node of this.nodes[lineNum]) {\n                     if (node) {\n                         const startLine = node.startPosition.row;\n                         const endLine = node.endPosition.row;\n                         const range = endLine - startLine;\n                         if (startLine === lineNum && range > widestRange) {\n                             widestRange = range;\n                             widestNode = node;\n                         }\n                     }\n                 }\n            }\n\n            if (widestNode) {\n                const headStart = widestNode.startPosition.row;\n                const headEnd = widestNode.endPosition.row;\n\n                // Include lines from the header of the widest scope, up to headerMax\n                const linesToInclude = Math.min(this.headerMax, headEnd - headStart + 1); // Include the end line\n                for (let i = headStart; i < headStart + linesToInclude; i++) { // Changed loop condition\n                     if (i >= 0 && i < this.numLines) { // Add bounds check\n                         this.showLines.add(i);\n                     }\n                }\n            }\n\n            // Removed the recursive call here\n            // if (this.lastLine) {\n            //     const lastLine = this.getLastLineOfScope(lineNum);\n            //     this.addParentScopes(lastLine); // Recursive call\n            // }\n        }",
+    //     "new_str": "\\\n        for (const lineNum of this.scopes[index]) {\n            if (lineNum >= this.header.length || !this.header[lineNum] || this.header[lineNum].length === 0) {\n                continue;\n            }\n\n            // After arrangeHeaders, this.header[lineNum][0] contains the smallest scope starting at lineNum\n            const headStart = this.header[lineNum][0][1];\n            const headEnd = this.header[lineNum][0][2];\n\n            // Go code includes lines from headStart up to but not including headEnd\n            // Let's replicate that, but also respect headerMax\n            const linesToInclude = Math.min(this.headerMax, headEnd - headStart); // Calculate lines to include based on size, not range+1\n            const actualHeadEnd = headStart + linesToInclude; // Determine the actual end line to include\n\n            if (headStart >= 0 && actualHeadEnd <= this.numLines && (headStart > 0 || this.showTopOfFileParentScope)) {\n                 for (let i = headStart; i < actualHeadEnd; i++) { // Loop up to actualHeadEnd (exclusive)\n                     if (i >= 0 && i < this.numLines) { // Add bounds check\n                         this.showLines.add(i);\n                     }\n                 }\n            }\n\n            // Re-add the recursive call based on this.lastLine, calling GetLastLineOfScope on lineNum\n            if (this.lastLine) {\n                const lastLine = this.getLastLineOfScope(lineNum); // Call on lineNum\n                this.addParentScopes(lastLine); // Recursive call\n            }\n        }",
+    //     "start_line": 294
+    //   },
+    //   "result": {
+    //     "content": [
+    //       {
+    //         "type": "text",
+    //         "text": "No replacement was performed. No sufficiently close match for old_str found in nodejs/src/treeContext.ts.\nTry adjusting your input or the file content."
+    //       }
+    //     ],
+    //     "isError": true
+    //   }
+    // }
+    //
 
     it("should replace partial single line matches", async () => {
       const filePath = "/test/file.txt";
@@ -387,6 +415,41 @@ func (ti *TagIndex) GenerateFromFiles(ctx context.Context, files map[string][]by
       }
     });
 
+    it.each([treeContextFix, treeContext2, treeContext3, fileSystemFix])(
+      "should replace single line matches where the new string has multiple lines 2",
+      async ({ toolResult, fileContent }) => {
+        (fs.readFile as Mock).mockResolvedValue(fileContent);
+        (fs.writeFile as Mock).mockResolvedValue(undefined);
+        (fs.stat as Mock).mockResolvedValue({
+          isFile: () => true,
+          isDirectory: () => false,
+        });
+
+        const result = await editor.strReplace({
+          path: toolResult.args.path,
+          old_str: toolResult.args.old_str,
+          new_str: toolResult.args.new_str,
+          start_line: toolResult.args.start_line,
+        });
+
+        const newStr = toolResult.args.new_str.trim().startsWith(`\\\n`)
+          ? toolResult.args.new_str.substring(`\\`.length)
+          : toolResult.args.new_str;
+
+        expect(fs.writeFile).toHaveBeenCalledWith(
+          toolResult.args.path,
+          expect.stringContaining(newStr),
+          "utf8",
+        );
+        expect(result).toContain(
+          `The file ${toolResult.args.path} has been edited.`,
+        );
+        for (const line of newStr.split(`\n`)) {
+          expect(result).toContain(line);
+        }
+      },
+    );
+
     it("should replace matches where the model adds an extra \\ at the beginning of the match", async () => {
       const filePath = "/test/file.txt";
       const oldStr = "\\\n  public calculatePageRanks(): number[] | null {\n";
@@ -663,8 +726,8 @@ func (ti *TagIndex) GenerateFromFiles(ctx context.Context, files map[string][]by
     ).rejects.toThrow(ToolError);
     await expect(
       editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr }),
-    ).rejects.toThrow(
-      `No replacement was performed. No sufficiently close match for old_str found in /test/file.txt.\nold_str matching diverged after 2 matching lines.\nExpected line from old_str: \`  Another line.. so close\` (line 3 in old_str), found line: \`\tAnother line.\` (line 3 in file). 1 lines remained to compare but they were not checked due to this line not matching.\nTry adjusting your input or the file content.`,
+    ).rejects.toThrowError(
+      `No replacement was performed. No sufficiently close match for old_str found in /test/file.txt.\nold_str matching diverged after 2 matching lines.\nExpected line from old_str: \`  Another line.. so close\` (line 3 in old_str), found line: \`\tAnother line.\` (line 3 in file). 1 lines remained to compare but they were not checked due to this line not matching.\n\nHere are the lines that did match up until the old_str diverged:`,
     );
   });
 

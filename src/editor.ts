@@ -4,16 +4,23 @@ import { promisify } from "util";
 import { distance } from "fastest-levenshtein";
 
 function removeWhitespace(str: string): string {
-  return (
-    str
-      .replace(/\t/g, "") // tabs to spaces
-      .replace(/ +/g, "") // collapse multiple spaces
-      .replace(/^ +| +$/gm, "") // trim each line
-      .replace(/\r?\n/g, "\n")
-      .replace(/\s/g, "")
-      // @ts-ignore
-      .replaceAll(`\\n`, `\n`)
-  ); // normalize newlines
+  return str
+    .replace(/\t/g, "") // tabs to spaces
+    .replace(/ +/g, "") // collapse multiple spaces
+    .replace(/^ +| +$/gm, "") // trim each line
+    .replace(/\r?\n/g, "\n")
+    .replace(/\s/g, "")
+    .replaceAll(`\\n`, `\n`); // normalize newlines
+}
+
+function removeVaryingChars(str: string): string {
+  return removeWhitespace(str)
+    .replaceAll(`\n`, ``)
+    .replaceAll(`'`, ``)
+    .replaceAll(`"`, ``)
+    .replaceAll("`", ``)
+    .replaceAll(`;`, ``)
+    .replaceAll(`\\r`, ``);
 }
 
 import {
@@ -33,6 +40,7 @@ import {
   validatePath,
   // truncateText
 } from "./utils.js";
+import { match } from "assert";
 
 const realExecAsync = promisify(exec);
 
@@ -113,16 +121,17 @@ export class FileEditor {
 
   private undoubleEscape(input: string) {
     return input.replace(
-      /("([^"\\]|\\.)*"|'([^'\\]|\\.)*'|`([^`\\]|\\.)*`)|\\n|\\r|\\t|\\"|\\'|\\`/g,
+      /("([^"\\]|\\.)*"|'([^'\\]|\\.)*'|`([^`\\]|\\.)*`|\/([^\/\\\n]|\\.)+\/[gimsuy]*)|\\n|\\r|\\t|\\"|\\'|\\`/g,
       (match) => {
         if (
           match.startsWith('"') ||
           match.startsWith("'") ||
-          match.startsWith("`")
+          match.startsWith("`") ||
+          match.startsWith("/")
         ) {
-          return match; // skip unescaping inside quoted or backticked strings
+          return match; // skip unescaping inside strings, backticks, or regex literals
         }
-        // outside of quotes/backticks: unescape
+        // outside of those: unescape
         return match
           .replace(/\\n/g, "\n")
           .replace(/\\r/g, "\r")
@@ -149,7 +158,7 @@ export class FileEditor {
     }
     const startLineArg =
       typeof args.start_line === `number`
-        ? Math.max(args.start_line - 1, 0)
+        ? Math.max(args.start_line - 3, 0) // - 3 cause llms are not precise
         : undefined;
 
     // Split and normalize
@@ -161,12 +170,19 @@ export class FileEditor {
       return removeWhitespace(l) !== ``;
     });
     const oldLines = oldLinesOriginal.map(removeWhitespace);
-    const fileLines = fileContent.split("\n");
+    const split = (str: string): string[] => {
+      return str
+        .replaceAll("\\n", "TEMP_ESCAPED_NEWLINES")
+        .split("\n")
+        .map((l) => l.replaceAll(`TEMP_ESCAPED_NEWLINES`, `\\n`));
+    };
+    const fileLines = split(fileContent);
     const normFileLines = fileLines.map(removeWhitespace);
     // const threshold = Math.max(2, Math.floor(oldStr.length * 0.1));
 
     let bestMatch: {
       start: number;
+      end?: number;
       avgDist: number;
       type: "replace-lines" | "replace-in-line";
     } = { start: -1, avgDist: Infinity, type: "replace-lines" };
@@ -205,12 +221,90 @@ export class FileEditor {
     let divergedMessage: string | undefined;
     let divergenceAfterX = 0;
 
+    const fileNoSpace = removeVaryingChars(fileContent);
+    const oldStringNoSpace = removeVaryingChars(oldStr);
+    console.log(
+      { fileNoSpace, oldStringNoSpace },
+      fileNoSpace.includes(oldStringNoSpace),
+      fileNoSpace.includes(oldStringNoSpace.substring(0, -1)),
+    );
+    if (fileNoSpace.includes(oldStringNoSpace.substring(0, -1))) {
+      console.log(`yes!!`);
+      // console.log(`yes!!`, fileNoSpace, oldStringNoSpace);
+
+      let oldStringNoSpaceBuffer = oldStringNoSpace;
+      let startIndex: null | number = null;
+      let endIndex: null | number = null;
+      for (const [index, line] of split(fileContent).entries()) {
+        const lineNoSpace = removeVaryingChars(line);
+        if (lineNoSpace === `` && !startIndex) continue;
+        const startsWith = oldStringNoSpaceBuffer.startsWith(lineNoSpace);
+        const startsWithNoDanglingCommaTho =
+          !startsWith &&
+          lineNoSpace.endsWith(`,`) &&
+          oldStringNoSpaceBuffer
+            .substring(lineNoSpace.length - 1)
+            .startsWith(`)`);
+        if (
+          startsWith ||
+          // allow for missing dangling comma
+          // TODO: this should only apply to JS/TS files
+          startsWithNoDanglingCommaTho
+        ) {
+          console.log({
+            line,
+            lineNoSpace,
+            startOld: oldStringNoSpaceBuffer.substring(0, 5),
+            startIndex,
+            index,
+          });
+
+          if (startIndex === null) {
+            startIndex = index;
+            console.log(`starting match on line ${index} ${line}`);
+          }
+          oldStringNoSpaceBuffer = oldStringNoSpaceBuffer.substring(
+            startsWithNoDanglingCommaTho
+              ? lineNoSpace.length - 1 // remove the comma
+              : lineNoSpace.length,
+          );
+          if (oldStringNoSpaceBuffer.length === 0 && startIndex !== null) {
+            endIndex = index;
+            console.log(`ending match on line ${index} ${line}`);
+            break;
+          }
+        } else if (startIndex !== null) {
+          console.log(`diverged`, { oldStringNoSpaceBuffer, lineNoSpace });
+          // diverged from a partial match. reset
+          startIndex = null;
+        }
+      }
+      if (startIndex !== null && endIndex !== null) {
+        bestMatch.start = startIndex;
+        bestMatch.end = endIndex;
+        console.info(
+          `Using whitespace collapsed old_str as as start/end index`,
+        );
+      }
+      // console.log({ startIndex, endIndex });
+    }
     // console.error(normFileLines);
 
     // console.log({ isSingleLineReplacement });
     for (const [index, normLine] of normFileLines.entries()) {
+      // we already matched above!
+      if (bestMatch.end) break;
       if (typeof startLineArg !== `undefined` && index + 1 < startLineArg)
         continue;
+
+      if (
+        typeof startLineArg !== `undefined` &&
+        index + 1 > startLineArg + 5 &&
+        isSingleLineReplacement
+      ) {
+        // only break early for single line replacements.. if the llm added a line number to start from + multiple lines to match, often it gets confused about the line numbers, so keep going until the end.
+        break;
+      }
       // console.log(index, normLine, oldLines[0]);
       // this line is equal to the first line in our from replacement. Lets check each following line to see if we match
       const firstDistance = distance(oldLines[0], normLine);
@@ -235,6 +329,8 @@ export class FileEditor {
         let matchingLineCount = 0;
         for (const [matchIndex, oldLine] of oldLines.entries()) {
           const innerNormLine = normFileLines[index + matchIndex];
+          const nextInnerNormLine = normFileLines[index + matchIndex + 1];
+          const nextOldLine = oldLines[matchIndex + 1];
           const innerDistance = distance(
             oldLine,
             normFileLines[index + matchIndex],
@@ -261,10 +357,31 @@ export class FileEditor {
           if (isMatch || fewLinesAreLeft) {
             matchingLineCount++;
             // all good! we're matching
-            console.error(`matching ${index + matchIndex}`);
+            console.error(
+              `matching ${index + matchIndex}`,
+              oldLinesOriginal[matchIndex],
+            );
           } else {
-            const message = `old_str matching diverged after ${matchingLineCount} matching lines.\nExpected line from old_str: \`${oldLinesOriginal[matchIndex]}\` (line ${matchIndex + 1} in old_str), found line: \`${fileLines[matchIndex]}\` (line ${index + 1 + matchIndex} in file). ${remainingLines - 1} lines remained to compare but they were not checked due to this line not matching.\n`;
+            const message = `old_str matching diverged after ${matchingLineCount} matching lines.\nExpected line from old_str: \`${oldLinesOriginal[matchIndex]}\` (line ${matchIndex + 1} in old_str), found line: \`${fileLines[index + matchIndex]}\` (line ${index + 1 + matchIndex} in file). ${remainingLines - 1} lines remained to compare but they were not checked due to this line not matching.\n\nHere are the lines that did match up until the old_str diverged:\n\n${oldLinesOriginal.slice(0, matchIndex).join(`\n`)}\n\nHere are the remaining lines you would've had to provide for the old_str to match:\n\n${fileLines
+              .slice(index + matchIndex, index + matchIndex + remainingLines)
+              .join(`\n`)}`;
             console.error(message);
+            console.error(
+              `---->>>>Next line matches? `,
+              nextInnerNormLine === nextOldLine,
+            );
+            console.error(
+              `Remaining actual lines that would've matched:`,
+              fileLines.slice(
+                index + matchIndex,
+                index + matchIndex + remainingLines,
+              ),
+            );
+            console.error(
+              `Remaining old_string lines that didn't match:`,
+              oldLinesOriginal.slice(matchIndex),
+            );
+
             // tell the llm about the longest matching string so it can adjust the next input
             if (matchingLineCount > divergenceAfterX) {
               divergenceAfterX = matchingLineCount;
@@ -273,6 +390,7 @@ export class FileEditor {
             // we could also do levenstein here
             isMatching = false;
             // we diverged
+            // continue;
             break;
           }
         }
@@ -281,6 +399,8 @@ export class FileEditor {
           console.error(`matched! ${index}`);
           break;
         }
+      } else {
+        // console.log(normLine);
       }
     }
     // for (let i = 0; i <= normFileLines.length - oldLines.length; i++) {
@@ -308,8 +428,11 @@ ${divergedMessage ? divergedMessage : ``}Try adjusting your input or the file co
       const newFileLines = [
         ...fileLines.slice(0, bestMatch.start),
         ...(newStr ? newStr.split("\n") : []),
-        ...fileLines.slice(bestMatch.start + oldLines.length),
+        ...fileLines.slice(
+          bestMatch.end ? bestMatch.end + 1 : bestMatch.start + oldLines.length,
+        ),
       ];
+      // console.log({ newFileLines });
       newFileContent = newFileLines.join("\n");
       await writeFile(args.path, newFileContent);
     } else if (bestMatch.type === `replace-in-line`) {
