@@ -14,13 +14,15 @@ function removeWhitespace(str: string): string {
 }
 
 function removeVaryingChars(str: string): string {
-  return removeWhitespace(str)
-    .replaceAll(`\n`, ``)
-    .replaceAll(`'`, ``)
-    .replaceAll(`"`, ``)
-    .replaceAll("`", ``)
-    .replaceAll(`;`, ``)
-    .replaceAll(`\\r`, ``);
+  return (
+    removeWhitespace(str)
+      .replaceAll(`\n`, ``)
+      .replaceAll(`'`, ``)
+      .replaceAll(`"`, ``)
+      .replaceAll("`", ``)
+      // .replaceAll(`;`, ``) // this sometimes causes an extra ; to be printed! TODO: should it be fixed another way? there's a test for this that will fail if this is uncommented
+      .replaceAll(`\\r`, ``)
+  );
 }
 
 import {
@@ -146,6 +148,9 @@ export class FileEditor {
   async strReplace(args: StringReplaceArgs): Promise<string> {
     await validatePath("string_replace", args.path);
 
+    if (args.old_str === args.new_str) {
+      throw new ToolError(`Received the same string for old_str and new_str`);
+    }
     const fileContent = await readFile(args.path);
     let oldStr = this.undoubleEscape(args.old_str);
     let newStr = this.undoubleEscape(args.new_str || "");
@@ -184,7 +189,7 @@ export class FileEditor {
       start: number;
       end?: number;
       avgDist: number;
-      type: "replace-lines" | "replace-in-line";
+      type: "replace-lines" | "replace-in-line" | "delete-line";
     } = { start: -1, avgDist: Infinity, type: "replace-lines" };
 
     const isSingleLineReplacement = oldLines.length === 1;
@@ -292,6 +297,7 @@ export class FileEditor {
 
     // console.log({ isSingleLineReplacement });
     for (const [index, normLine] of normFileLines.entries()) {
+      if (!normLine) continue;
       // we already matched above!
       if (bestMatch.end) break;
       if (typeof startLineArg !== `undefined` && index + 1 < startLineArg)
@@ -307,13 +313,13 @@ export class FileEditor {
       }
       // console.log(index, normLine, oldLines[0]);
       // this line is equal to the first line in our from replacement. Lets check each following line to see if we match
-      const firstDistance = distance(oldLines[0], normLine);
-      const firstPercentDiff = (firstDistance / normLine.length) * 100;
+      const firstDistance = distance(oldLines[0] || "", normLine || "");
+      const firstPercentDiff = (firstDistance / (normLine?.length || 0)) * 100;
       if (firstPercentDiff < 10 && firstPercentDiff > 0) {
         console.error({
           firstPercentDiff,
           firstDistance,
-          lineLength: normLine.length,
+          lineLength: normLine?.length || 0,
         });
       }
       if (
@@ -403,6 +409,25 @@ export class FileEditor {
         // console.log(normLine);
       }
     }
+
+    console.log({
+      bestMatch,
+      isSingleLineReplacement,
+      newStr,
+      startLineArg,
+      oldStr,
+    });
+
+    if (
+      bestMatch.start === -1 &&
+      (isSingleLineReplacement || oldStr === `\n`) &&
+      newStr === `` &&
+      typeof startLineArg === `number`
+    ) {
+      // we're just deleting a line
+      bestMatch.start = startLineArg;
+      bestMatch.type = "delete-line";
+    }
     // for (let i = 0; i <= normFileLines.length - oldLines.length; i++) {
     //     let totalDist = 0;
     //     for (let j = 0; j < oldLines.length; j++) {
@@ -444,10 +469,18 @@ ${divergedMessage ? divergedMessage : ``}Try adjusting your input or the file co
           : [
               fileLines
                 .at(bestMatch.start)!
-                .replace(oldLinesOriginal[0], firstNew),
+                .replace(oldLinesOriginal[0], firstNew || ""),
             ]),
         ...fileLines.slice(bestMatch.start + 1),
       ];
+      newFileContent = newFileLines.join("\n");
+      await writeFile(args.path, newFileContent);
+    } else if (bestMatch.type === `delete-line`) {
+      const newFileLines = [
+        ...fileLines.slice(0, bestMatch.start),
+        ...fileLines.slice(bestMatch.start + 1),
+      ];
+
       newFileContent = newFileLines.join("\n");
       await writeFile(args.path, newFileContent);
     }

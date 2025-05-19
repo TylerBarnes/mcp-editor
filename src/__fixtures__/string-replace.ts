@@ -10,14 +10,14 @@ type ToolResult = {
       path: string;
       old_str: string;
       new_str: string;
-      start_line: number;
+      start_line?: number;
     };
     result: {
       content: {
         type: string;
         text: string;
       }[];
-      isError: boolean;
+      isError?: boolean;
     };
   };
   fileContent: string;
@@ -601,6 +601,60 @@ export const fileSystemFix: ToolResult = {
   },
   fileContent: readFileSync(
     join(import.meta.dirname, "./fileSystem-1.ts"),
+    "utf-8",
+  ),
+};
+
+export const tagIndex: ToolResult = {
+  toolResult: {
+    type: "tool-result",
+    toolCallId: "RRoZaJH6G8ZtTKB2",
+    toolName: "string_replace",
+    args: {
+      path: "nodejs/src/tagIndex.ts",
+      old_str: "\n",
+      new_str: "",
+      start_line: 14,
+    },
+    result: {
+      content: [
+        {
+          type: "text",
+          text: "Cannot read properties of undefined (reading 'length')",
+        },
+      ],
+      isError: true,
+    },
+  },
+  fileContent: readFileSync(
+    join(import.meta.dirname, "./tagIndex-1.ts"),
+    "utf-8",
+  ),
+};
+
+export const tagIndex2: ToolResult = {
+  toolResult: {
+    type: "tool-result",
+    toolCallId: "M7cZkAUsYdbJ1d92",
+    toolName: "string_replace",
+    args: {
+      path: "nodejs/src/tagIndex.ts",
+      old_str:
+        "const jsQuery = `\n(import_declaration (string_literal) @import.path)\n  (function_declaration\n    name: (identifier) @def.function)\n  (method_definition\n    name: (property_identifier) @def.method)\n  (class_declaration\n    name: (identifier) @def.class)\n  (identifier) @ref.ident\n  (identifier) @ref.ident (member_expression)\n  (property_identifier) @ref.prop (member_expression)\n`;",
+      new_str:
+        "const jsQuery = `\n(import_declaration (string_literal) @import.path)\n(function_declaration name: (identifier) @def.function)\n(method_definition name: (property_identifier) @def.method)\n(class_declaration name: (identifier) @def.class)\n(identifier) @ref.ident\n(call_expression function: (identifier) @ref.ident)\n(member_expression property: (property_identifier) @ref.prop)\n`;",
+    },
+    result: {
+      content: [
+        {
+          type: "text",
+          text: "The file nodejs/src/tagIndex.ts has been edited. Here's the result of running `cat -n` on a snippet of nodejs/src/tagIndex.ts:\n    30\t(field_identifier) @ref.field\n    31\t`;\n    32\t\n    33\tconst jsQuery = `\n    34\t(import_declaration (string_literal) @import.path)\n    35\t(function_declaration name: (identifier) @def.function)\n    36\t(method_definition name: (property_identifier) @def.method)\n    37\t(class_declaration name: (identifier) @def.class)\n    38\t(identifier) @ref.ident\n    39\t(call_expression function: (identifier) @ref.ident)\n    40\t(member_expression property: (property_identifier) @ref.prop)\n    41\t`;\n    42\t`;\n    43\t\n    44\tconst tsQuery = `\n    45\t(import_declaration (string_literal) @import.path)\n    46\t(function_declaration\n    47\t  name: (identifier) @def.function)\nReview the changes and make sure they are as expected. Edit the file again if necessary.",
+        },
+      ],
+    },
+  },
+  fileContent: readFileSync(
+    join(import.meta.dirname, "./tagIndex-2.ts"),
     "utf-8",
   ),
 };

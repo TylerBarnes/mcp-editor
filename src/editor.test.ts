@@ -29,6 +29,8 @@ import { ToolError } from "./types.js";
 import { FileEditor } from "./editor.js";
 import {
   fileSystemFix,
+  tagIndex,
+  tagIndex2,
   treeContext2,
   treeContext3,
   treeContextFix,
@@ -80,27 +82,72 @@ describe("FileEditor", () => {
 Review the changes and make sure they are as expected. Edit the file again if necessary.`);
     });
 
-    // {
-    //   "type": "tool-result",
-    //   "toolCallId": "3VUuRYQAxgnd0eZ9",
-    //   "toolName": "string_replace",
-    //   "args": {
-    //     "path": "nodejs/src/treeContext.ts",
-    //     "old_str": "\\\n        for (const lineNum of this.scopes[index]) {\n            // Find the node that starts at lineNum and has the largest range (represents the widest scope)\n            let widestNode: any | null = null;\n            let widestRange = -1; // Initialize with -1 to ensure any valid range is larger\n\n            if (this.nodes[lineNum]) { // Added check for undefined\n                 for (const node of this.nodes[lineNum]) {\n                     if (node) {\n                         const startLine = node.startPosition.row;\n                         const endLine = node.endPosition.row;\n                         const range = endLine - startLine;\n                         if (startLine === lineNum && range > widestRange) {\n                             widestRange = range;\n                             widestNode = node;\n                         }\n                     }\n                 }\n            }\n\n            if (widestNode) {\n                const headStart = widestNode.startPosition.row;\n                const headEnd = widestNode.endPosition.row;\n\n                // Include lines from the header of the widest scope, up to headerMax\n                const linesToInclude = Math.min(this.headerMax, headEnd - headStart + 1); // Include the end line\n                for (let i = headStart; i < headStart + linesToInclude; i++) { // Changed loop condition\n                     if (i >= 0 && i < this.numLines) { // Add bounds check\n                         this.showLines.add(i);\n                     }\n                }\n            }\n\n            // Removed the recursive call here\n            // if (this.lastLine) {\n            //     const lastLine = this.getLastLineOfScope(lineNum);\n            //     this.addParentScopes(lastLine); // Recursive call\n            // }\n        }",
-    //     "new_str": "\\\n        for (const lineNum of this.scopes[index]) {\n            if (lineNum >= this.header.length || !this.header[lineNum] || this.header[lineNum].length === 0) {\n                continue;\n            }\n\n            // After arrangeHeaders, this.header[lineNum][0] contains the smallest scope starting at lineNum\n            const headStart = this.header[lineNum][0][1];\n            const headEnd = this.header[lineNum][0][2];\n\n            // Go code includes lines from headStart up to but not including headEnd\n            // Let's replicate that, but also respect headerMax\n            const linesToInclude = Math.min(this.headerMax, headEnd - headStart); // Calculate lines to include based on size, not range+1\n            const actualHeadEnd = headStart + linesToInclude; // Determine the actual end line to include\n\n            if (headStart >= 0 && actualHeadEnd <= this.numLines && (headStart > 0 || this.showTopOfFileParentScope)) {\n                 for (let i = headStart; i < actualHeadEnd; i++) { // Loop up to actualHeadEnd (exclusive)\n                     if (i >= 0 && i < this.numLines) { // Add bounds check\n                         this.showLines.add(i);\n                     }\n                 }\n            }\n\n            // Re-add the recursive call based on this.lastLine, calling GetLastLineOfScope on lineNum\n            if (this.lastLine) {\n                const lastLine = this.getLastLineOfScope(lineNum); // Call on lineNum\n                this.addParentScopes(lastLine); // Recursive call\n            }\n        }",
-    //     "start_line": 294
-    //   },
-    //   "result": {
-    //     "content": [
-    //       {
-    //         "type": "text",
-    //         "text": "No replacement was performed. No sufficiently close match for old_str found in nodejs/src/treeContext.ts.\nTry adjusting your input or the file content."
-    //       }
-    //     ],
-    //     "isError": true
-    //   }
-    // }
-    //
+    it("should allow deleting a line by passing new_str as an empty string", async () => {
+      const filePath = "/test/file.txt";
+      const oldStr = " Hello World";
+      const newStr = "";
+      const fileContent = "This is a test.\nHello World\n\t\tAnother line."; // No leading/trailing spaces
+
+      (fs.readFile as Mock).mockResolvedValue(fileContent);
+      (fs.writeFile as Mock).mockResolvedValue(undefined);
+      (fs.stat as Mock).mockResolvedValue({
+        isFile: () => true,
+        isDirectory: () => false,
+      });
+
+      const result = await editor.strReplace({
+        path: filePath,
+        old_str: oldStr,
+        new_str: newStr,
+        start_line: 2,
+      });
+
+      const expectedNewContent = "This is a test.\n\t\tAnother line.";
+      expect(fs.writeFile).toHaveBeenCalledWith(
+        filePath,
+        expectedNewContent,
+        "utf8",
+      );
+      expect(result)
+        .toEqual(`The file /test/file.txt has been edited. Here's the result of running \`cat -n\` on a snippet of /test/file.txt:
+     1\tThis is a test.
+     2\t        Another line.
+Review the changes and make sure they are as expected. Edit the file again if necessary.`);
+    });
+
+    it("should allow deleting a line by passing new_str as an empty string with a partial line match", async () => {
+      const filePath = "/test/file.txt";
+      const oldStr = " World";
+      const newStr = "";
+      const fileContent = "This is a test.\nHello World\n\t\tAnother line."; // No leading/trailing spaces
+
+      (fs.readFile as Mock).mockResolvedValue(fileContent);
+      (fs.writeFile as Mock).mockResolvedValue(undefined);
+      (fs.stat as Mock).mockResolvedValue({
+        isFile: () => true,
+        isDirectory: () => false,
+      });
+
+      const result = await editor.strReplace({
+        path: filePath,
+        old_str: oldStr,
+        new_str: newStr,
+        start_line: 2,
+      });
+
+      const expectedNewContent = "This is a test.\nHello\n\t\tAnother line.";
+      expect(fs.writeFile).toHaveBeenCalledWith(
+        filePath,
+        expectedNewContent,
+        "utf8",
+      );
+      expect(result)
+        .toEqual(`The file /test/file.txt has been edited. Here's the result of running \`cat -n\` on a snippet of /test/file.txt:
+     1\tThis is a test.
+     2\tHello
+     3\t        Another line.
+Review the changes and make sure they are as expected. Edit the file again if necessary.`);
+    });
 
     it("should replace partial single line matches", async () => {
       const filePath = "/test/file.txt";
@@ -415,7 +462,14 @@ func (ti *TagIndex) GenerateFromFiles(ctx context.Context, files map[string][]by
       }
     });
 
-    it.each([treeContextFix, treeContext2, treeContext3, fileSystemFix])(
+    it.each([
+      treeContextFix,
+      treeContext2,
+      treeContext3,
+      fileSystemFix,
+      tagIndex,
+      tagIndex2,
+    ])(
       "should replace single line matches where the new string has multiple lines 2",
       async ({ toolResult, fileContent }) => {
         (fs.readFile as Mock).mockResolvedValue(fileContent);
@@ -444,6 +498,7 @@ func (ti *TagIndex) GenerateFromFiles(ctx context.Context, files map[string][]by
         expect(result).toContain(
           `The file ${toolResult.args.path} has been edited.`,
         );
+        expect(result.replaceAll(`\t`, ``)).not.toContain(`  42\`;\n    43\`;`);
         for (const line of newStr.split(`\n`)) {
           expect(result).toContain(line);
         }
@@ -705,6 +760,26 @@ func (ti *TagIndex) GenerateFromFiles(ctx context.Context, files map[string][]by
     await expect(
       editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr }),
     ).rejects.toThrow(/No replacement was performed/);
+  });
+
+  it("should throw ToolError if old and new strings are identical", async () => {
+    const filePath = "/test/file.txt";
+    const oldStr = "This is a test.";
+    const newStr = "This is a test.";
+    const fileContent = "This is a test.\nHello World\nAnother line.";
+
+    (fs.readFile as Mock).mockResolvedValue(fileContent);
+    (fs.stat as Mock).mockResolvedValue({
+      isFile: () => true,
+      isDirectory: () => false,
+    });
+
+    await expect(
+      editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr }),
+    ).rejects.toThrow(ToolError);
+    await expect(
+      editor.strReplace({ path: filePath, old_str: oldStr, new_str: newStr }),
+    ).rejects.toThrow(/Received the same string for old_str and new_str/);
   });
 
   it("should throw ToolError with divergence message if matching lines were found for multiple lines before diverging", async () => {
