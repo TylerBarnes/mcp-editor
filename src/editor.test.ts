@@ -29,6 +29,7 @@ import { ToolError } from "./types.js";
 import { FileEditor } from "./editor.js";
 import {
   fileSystemFix,
+  luaInit,
   tagIndex,
   tagIndex2,
   treeContext2,
@@ -469,6 +470,7 @@ func (ti *TagIndex) GenerateFromFiles(ctx context.Context, files map[string][]by
       fileSystemFix,
       tagIndex,
       tagIndex2,
+      luaInit,
     ])(
       "should replace single line matches where the new string has multiple lines 2",
       async ({ toolResult, fileContent, assert }) => {

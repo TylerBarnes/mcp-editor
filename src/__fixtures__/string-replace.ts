@@ -1,5 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
+import { expect } from "vitest";
 
 type ToolResult = {
   toolResult: {
@@ -658,4 +659,54 @@ export const tagIndex2: ToolResult = {
     join(import.meta.dirname, "./tagIndex-2.ts"),
     "utf-8",
   ),
+};
+
+function normalizeWhitespace(s: string) {
+  return s
+    .split(`\n`)
+    .map((l) => l.replace(/\s+/g, " ").trim())
+    .join(`\n`);
+}
+export const luaInit: ToolResult = {
+  toolResult: {
+    type: "tool-result",
+    toolCallId: "hdTFbURSbc1KErkR",
+    toolName: "string_replace",
+    args: {
+      path: "init.lua",
+      old_str: 'vim.cmd("colorscheme oxocarbon")',
+      new_str:
+        'vim.cmd("colorscheme oxocarbon")\n\nvim.g.calendar_google_calendar = 1',
+    },
+    result: {
+      content: [
+        {
+          type: "text",
+          text: 'The file init.lua has been edited. Here\'s the result of running `cat -n` on a snippet of init.lua:\n   590\t                        "<leader>ws",\n   591\t                        require("telescope.builtin").lsp_dynamic_workspace_symbols,\n   592\t                        "[W]orkspace [S]ymbols"\n   593\tvim.cmd("colorscheme oxocarbon")\n   594\t\n   595\tvim.g.calendar_google_calendar = 1\n   596\t                    map("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")\n   597\t                    map("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")\n   598\t                    map("K", vim.lsp.buf.hover, "Hover Documentation")\n   599\t                    map("gD", vim.lsp.buf.declaration, "[G]oto [D]eclaration")\n   600\t                end,\n   601\t            })\nReview the changes and make sure they are as expected. Edit the file again if necessary.',
+        },
+      ],
+    },
+  },
+  fileContent: readFileSync(
+    join(import.meta.dirname, "./luaInit-1.lua"),
+    "utf-8",
+  ),
+  assert: (result) => {
+    expect(normalizeWhitespace(result || "")).not.toContain(
+      normalizeWhitespace(`
+   590                            "<leader>ws",
+   591                          require("telescope.builtin").lsp_dynamic_workspace_symbols,
+   592                          "[W]orkspace [S]ymbols"
+   593  vim.cmd("colorscheme oxocarbon")
+   594
+   595  vim.g.calendar_google_calendar = 1
+   596                      map("<leader>rn", vim.lsp.buf.rename, "[R]e[n]ame")
+   597                      map("<leader>ca", vim.lsp.buf.code_action, "[C]ode [A]ction")
+   598                      map("K", vim.lsp.buf.hover, "Hover Documentation")
+   599                      map("gD", vim.lsp.buf.declaration, "[G]oto [D]eclaration")
+   600                  end,
+   601              })
+`),
+    );
+  },
 };

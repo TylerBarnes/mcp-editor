@@ -174,7 +174,7 @@ export class FileEditor {
     }
     const startLineArg =
       typeof args.start_line === `number`
-        ? Math.max(args.start_line - 3, 0) // - 3 cause llms are not precise
+        ? Math.max(args.start_line - 5, 0) // - 3 cause llms are not precise
         : undefined;
 
     // Split and normalize
@@ -252,6 +252,17 @@ export class FileEditor {
       let startIndex: null | number = null;
       let endIndex: null | number = null;
       for (const [index, line] of split(fileContent).entries()) {
+        if (
+          startIndex === null &&
+          typeof startLineArg !== `undefined` &&
+          index + 1 > startLineArg + 50 // allow for llm to be off by 50 lines lmao
+        ) {
+          continue;
+        }
+        if (typeof startLineArg !== `undefined` && index < startLineArg) {
+          continue;
+        }
+
         const lineNoSpace = removeVaryingChars(line);
         if (lineNoSpace === `` && !startIndex) continue;
         const startsWith = oldStringNoSpaceBuffer.startsWith(lineNoSpace);
@@ -260,7 +271,10 @@ export class FileEditor {
           lineNoSpace.endsWith(`,`) &&
           oldStringNoSpaceBuffer
             .substring(lineNoSpace.length - 1)
-            .startsWith(`)`);
+            .startsWith(`)`) &&
+          oldStringNoSpaceBuffer.startsWith(
+            lineNoSpace.substring(0, lineNoSpace.length - 1),
+          );
         if (
           startsWith ||
           // allow for missing dangling comma
@@ -293,6 +307,7 @@ export class FileEditor {
           console.log(`diverged`, { oldStringNoSpaceBuffer, lineNoSpace });
           // diverged from a partial match. reset
           startIndex = null;
+          oldStringNoSpaceBuffer = oldStringNoSpace;
         }
       }
       if (startIndex !== null && endIndex !== null) {
@@ -312,6 +327,9 @@ export class FileEditor {
       // we already matched above!
       if (bestMatch.end) break;
       if (typeof startLineArg !== `undefined` && index + 1 < startLineArg)
+        continue;
+      // if there's a start line it must match within the next 50 lines
+      if (typeof startLineArg !== `undefined` && index + 1 > startLineArg + 50)
         continue;
 
       if (
