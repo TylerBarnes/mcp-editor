@@ -218,21 +218,21 @@ export class FileEditor {
       );
     }
 
-    const escapeCountOld = oldStr.split(`\n`).join(``).match(/\\\\/g);
-
-    if ((escapeCountOld?.length || 0) > 40) {
-      throw new ToolError(
-        `Found more than 40 backslash characters in the old_str. This indicates the input string has been escaped instead of passed in directly.`,
-      );
-    }
-
-    const escapeCountNew = newStr.split(`\n`).join(``).match(/\\/g);
-
-    if ((escapeCountNew?.length || 0) > 40) {
-      throw new ToolError(
-        `Found more than 40 backslash characters in the new_str. This indicates the input string has been escaped instead of passed in directly.`,
-      );
-    }
+    // const escapeCountOld = oldStr.split(`\n`).join(``).match(/\\\\/g);
+    //
+    // if ((escapeCountOld?.length || 0) > 40) {
+    //   throw new ToolError(
+    //     `Found more than 40 backslash characters in the old_str. This indicates the input string has been escaped instead of passed in directly.`,
+    //   );
+    // }
+    //
+    // const escapeCountNew = newStr.split(`\n`).join(``).match(/\\/g);
+    //
+    // if ((escapeCountNew?.length || 0) > 40) {
+    //   throw new ToolError(
+    //     `Found more than 40 backslash characters in the new_str. This indicates the input string has been escaped instead of passed in directly.`,
+    //   );
+    // }
 
     let divergedMessage: string | undefined;
     let divergenceAfterX = 0;
@@ -493,7 +493,7 @@ ${divergedMessage ? divergedMessage : ``}Try adjusting your input or the file co
       const [firstNew, ...restNew] = newStr ? newStr.split("\n") : [];
       const newFileLines = [
         ...fileLines.slice(0, bestMatch.start),
-        ...(restNew.length
+        ...(restNew?.length
           ? [firstNew, ...restNew]
           : [
               fileLines
