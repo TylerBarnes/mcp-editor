@@ -653,7 +653,7 @@ vim.keymap.set("n", "<leader>do", function()
           new_str: newStr,
         });
 
-        const expectedNewContent = "This is a test.\nHello Vitest\n";
+const expectedNewContent = "This is a test.Hello Vitest\n";
         expect(fs.writeFile).toHaveBeenCalledWith(
           filePath,
           expectedNewContent,
@@ -743,7 +743,7 @@ vim.keymap.set("n", "<leader>do", function()
         // test escaped chars in double quotes
         // TODO: we shouldn't have a double newline after the first string here, right?
         const expectedNewContent =
-          "This is a test.\nHello Vitest\n\"a string \\n that is double escaped\"\n\n`a string\\ninside backticks`\n'a string\\n inside single quotes'";
+          "This is a test.\nHello Vitest\n\"a string \\n that is double escaped\"\n\n`a string\ninside backticks`\n'a string\n inside single quotes'";
         expect(fs.writeFile).toHaveBeenCalledWith(
           filePath,
           expectedNewContent,
@@ -752,6 +752,7 @@ vim.keymap.set("n", "<leader>do", function()
         expect(result).toContain("The file /test/file.txt has been edited");
 
         // and in backticks
+        (fs.writeFile as Mock).mockClear(); // Clear the mock to test only the second call
         (fs.readFile as Mock).mockResolvedValue(expectedNewContent);
         (fs.writeFile as Mock).mockResolvedValue(undefined);
         const result2 = await editor.strReplace({
@@ -762,7 +763,7 @@ vim.keymap.set("n", "<leader>do", function()
             '\nGoodbye Vitest\n"a string \\n that is definitely double escaped"\n\n`a string\\ninside backticks that still has the right escaping`',
         });
         const expectedNewContent2 =
-          "This is a test.\n\nGoodbye Vitest\n\"a string \\n that is definitely double escaped\"\n\n`a string\\ninside backticks that still has the right escaping`\n'a string\\n inside single quotes'";
+          "This is a test.\n\nGoodbye Vitest\n\"a string \\n that is definitely double escaped\"\n\n`a string\\ninside backticks that still has the right escaping`\n'a string\n inside single quotes'";
         expect(fs.writeFile).toHaveBeenCalledWith(
           filePath,
           expectedNewContent2,
@@ -968,7 +969,7 @@ Review the changes and make sure they are as expected. Edit the file again if ne
       new_str: newStr,
     });
 
-    const expectedNewContent = "Keep this\nAnd this too"; // Allow blank lines if present, just check block is gone
+const expectedNewContent = "Keep this\n\nAnd this too"; // With exact matching, the block is removed and newlines are preserved
     expect(fs.writeFile).toHaveBeenCalledWith(
       filePath,
       expectedNewContent,

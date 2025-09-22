@@ -153,6 +153,46 @@ export class FileEditor {
     }
     const fileContent = await readFile(args.path);
 
+// First, try exact match with the raw string (no processing)
+    // This handles cases where the search/replace should work exactly as provided
+    if (fileContent.includes(args.old_str)) {
+      // Exact match found! Use simple string replacement
+      // But still process the new string with undoubleEscape to handle escaping correctly
+      const processedNewStr = this.undoubleEscape(args.new_str || "");
+      const newFileContent = fileContent.split(args.old_str).join(processedNewStr);
+      
+      // Save the file
+      await writeFile(args.path, newFileContent);
+      
+      // Store in history
+      if (!this.fileHistory[args.path]) {
+        this.fileHistory[args.path] = [];
+      }
+      this.fileHistory[args.path].push(fileContent);
+      
+      // Find the line number for the snippet
+      const fileLines = newFileContent.split("\n");
+      const replacementLineIndex = fileContent.substring(0, fileContent.indexOf(args.old_str)).split("\n").length - 1;
+      const startLine = Math.max(0, replacementLineIndex - SNIPPET_LINES);
+      const endLine = Math.min(fileLines.length, replacementLineIndex + SNIPPET_LINES + (args.new_str || "").split("\n").length);
+      const snippet = fileLines.slice(startLine, endLine).join("\n");
+      
+      let successMsg = `The file ${args.path} has been edited. `;
+      successMsg += makeOutput(
+        snippet,
+        `a snippet of ${args.path}`,
+        startLine + 1,
+      );
+      successMsg += "Review the changes and make sure they are as expected. Edit the file again if necessary.";
+      
+      return successMsg;
+    }
+
+    // If exact match fails, proceed with fuzzy whitespace-agnostic matching
+    // First apply undoubleEscape for the fuzzy matching
+    const processedOldStr = this.undoubleEscape(args.old_str);
+    const processedNewStr = this.undoubleEscape(args.new_str || "");
+    
     // Remove leading line numbers and whitespace from each line
     const removeLeadingLineNumbers = (str: string): string => {
       return str
@@ -161,10 +201,8 @@ export class FileEditor {
         .join("\n");
     };
 
-    let oldStr = removeLeadingLineNumbers(this.undoubleEscape(args.old_str));
-    let newStr = removeLeadingLineNumbers(
-      this.undoubleEscape(args.new_str || ""),
-    );
+    let oldStr = removeLeadingLineNumbers(processedOldStr);
+    let newStr = removeLeadingLineNumbers(processedNewStr);
 
     if (oldStr.startsWith(`\\\n`)) {
       oldStr = oldStr.substring(`\\\n`.length);
@@ -188,9 +226,9 @@ export class FileEditor {
     const oldLines = oldLinesOriginal.map(removeWhitespace);
     const split = (str: string): string[] => {
       return str
-        .replaceAll("\\n", "TEMP_ESCAPED_NEWLINES")
+        .replaceAll("\\n", "\n")
         .split("\n")
-        .map((l) => l.replaceAll(`TEMP_ESCAPED_NEWLINES`, `\\n`));
+        .map((l) => l.replaceAll(`\n`, `\\n`));
     };
     const fileLines = split(fileContent);
     const normFileLines = fileLines.map(removeWhitespace);
