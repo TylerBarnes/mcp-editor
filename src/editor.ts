@@ -3,7 +3,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { distance } from "fastest-levenshtein";
 
-function removeWhitespace(str: string): string {
+export function removeWhitespace(str: string): string {
   return str
     .replace(/\t/g, "") // tabs to spaces
     .replace(/ +/g, "") // collapse multiple spaces
@@ -13,7 +13,7 @@ function removeWhitespace(str: string): string {
     .replaceAll(`\\n`, `\n`); // normalize newlines
 }
 
-function removeVaryingChars(str: string): string {
+export function removeVaryingChars(str: string): string {
   return (
     removeWhitespace(str)
       .replaceAll(`\n`, ``)
@@ -153,38 +153,48 @@ export class FileEditor {
     }
     const fileContent = await readFile(args.path);
 
-// First, try exact match with the raw string (no processing)
+    // First, try exact match with the raw string (no processing)
     // This handles cases where the search/replace should work exactly as provided
     if (fileContent.includes(args.old_str)) {
       // Exact match found! Use simple string replacement
       // But still process the new string with undoubleEscape to handle escaping correctly
       const processedNewStr = this.undoubleEscape(args.new_str || "");
-      const newFileContent = fileContent.split(args.old_str).join(processedNewStr);
-      
+      const newFileContent = fileContent
+        .split(args.old_str)
+        .join(processedNewStr);
+
       // Save the file
       await writeFile(args.path, newFileContent);
-      
+
       // Store in history
       if (!this.fileHistory[args.path]) {
         this.fileHistory[args.path] = [];
       }
       this.fileHistory[args.path].push(fileContent);
-      
+
       // Find the line number for the snippet
       const fileLines = newFileContent.split("\n");
-      const replacementLineIndex = fileContent.substring(0, fileContent.indexOf(args.old_str)).split("\n").length - 1;
+      const replacementLineIndex =
+        fileContent.substring(0, fileContent.indexOf(args.old_str)).split("\n")
+          .length - 1;
       const startLine = Math.max(0, replacementLineIndex - SNIPPET_LINES);
-      const endLine = Math.min(fileLines.length, replacementLineIndex + SNIPPET_LINES + (args.new_str || "").split("\n").length);
+      const endLine = Math.min(
+        fileLines.length,
+        replacementLineIndex +
+          SNIPPET_LINES +
+          (args.new_str || "").split("\n").length,
+      );
       const snippet = fileLines.slice(startLine, endLine).join("\n");
-      
+
       let successMsg = `The file ${args.path} has been edited. `;
       successMsg += makeOutput(
         snippet,
         `a snippet of ${args.path}`,
         startLine + 1,
       );
-      successMsg += "Review the changes and make sure they are as expected. Edit the file again if necessary.";
-      
+      successMsg +=
+        "Review the changes and make sure they are as expected. Edit the file again if necessary.";
+
       return successMsg;
     }
 
@@ -192,17 +202,17 @@ export class FileEditor {
     // First apply undoubleEscape for the fuzzy matching
     const processedOldStr = this.undoubleEscape(args.old_str);
     const processedNewStr = this.undoubleEscape(args.new_str || "");
-    
-    // Remove leading line numbers and whitespace from each line
-    const removeLeadingLineNumbers = (str: string): string => {
-      return str
-        .split("\n")
-        .map((line) => line.replace(/^\s*\d+\s*/, ""))
-        .join("\n");
-    };
 
-    let oldStr = removeLeadingLineNumbers(processedOldStr);
-    let newStr = removeLeadingLineNumbers(processedNewStr);
+    // Remove leading line numbers and whitespace from each line
+    // const removeLeadingLineNumbers = (str: string): string => {
+    //   return str
+    //     .split("\n")
+    //     .map((line) => line.replace(/^\s*\d+\s*/, ""))
+    //     .join("\n");
+    // };
+
+    let oldStr = processedOldStr;
+    let newStr = processedNewStr;
 
     if (oldStr.startsWith(`\\\n`)) {
       oldStr = oldStr.substring(`\\\n`.length);
