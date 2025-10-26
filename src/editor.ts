@@ -158,7 +158,8 @@ export class FileEditor {
     if (fileContent.includes(args.old_str)) {
       // Exact match found! Use simple string replacement
       // But still process the new string with undoubleEscape to handle escaping correctly
-      const processedNewStr = this.undoubleEscape(args.new_str || "");
+      const processedNewStr = args.new_str || "";
+      // const processedNewStr = this.undoubleEscape(args.new_str || "");
       const newFileContent = fileContent
         .split(args.old_str)
         .join(processedNewStr);
@@ -200,8 +201,18 @@ export class FileEditor {
 
     // If exact match fails, proceed with fuzzy whitespace-agnostic matching
     // First apply undoubleEscape for the fuzzy matching
-    const processedOldStr = this.undoubleEscape(args.old_str);
-    const processedNewStr = this.undoubleEscape(args.new_str || "");
+    const processedOldStr = args.old_str;
+    // const processedOldStr = this.undoubleEscape(args.old_str);
+    const processedNewStr = args.new_str || "";
+    // const processedNewStr = this.undoubleEscape(args.new_str || "");
+
+    // Remove leading line numbers and whitespace from each line
+    const removeLeadingLineNumbers = (str: string): string => {
+      return str
+        .split("\n")
+        .map((line) => line.replace(/^\s*\d+\s*/, ""))
+        .join("\n");
+    };
 
     // Remove leading line numbers and whitespace from each line
     // const removeLeadingLineNumbers = (str: string): string => {
@@ -593,7 +604,8 @@ ${divergedMessage ? divergedMessage : ``}Try adjusting your input or the file co
     await validatePath("insert", args.path);
 
     const fileContent = await readFile(args.path);
-    const newStr = this.undoubleEscape(args.new_str);
+    const newStr = args.new_str;
+    // const newStr = this.undoubleEscape(args.new_str);
     const fileLines = fileContent.split("\n");
     const nLinesFile = fileLines.length;
 
