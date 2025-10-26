@@ -653,7 +653,7 @@ vim.keymap.set("n", "<leader>do", function()
           new_str: newStr,
         });
 
-const expectedNewContent = "This is a test.Hello Vitest\n";
+        const expectedNewContent = "This is a test.Hello Vitest\n";
         expect(fs.writeFile).toHaveBeenCalledWith(
           filePath,
           expectedNewContent,
@@ -969,7 +969,7 @@ Review the changes and make sure they are as expected. Edit the file again if ne
       new_str: newStr,
     });
 
-const expectedNewContent = "Keep this\n\nAnd this too"; // With exact matching, the block is removed and newlines are preserved
+    const expectedNewContent = "Keep this\n\nAnd this too"; // With exact matching, the block is removed and newlines are preserved
     expect(fs.writeFile).toHaveBeenCalledWith(
       filePath,
       expectedNewContent,
